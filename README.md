@@ -5,16 +5,22 @@
 > This project is inspired by real-world web servers and aims to teach low-level networking, parsing HTTP requests, and managing concurrency.
 
 # Index
+* [Documentation](#documentation)
 * [Project Description](#project-description)
 * [Features](#features)
 * [Methods](#http-methods)
 * [Usage](#usage)
 * [Final Grade](#grade)
 
+## Documentation
+For all the documentation you may need go to our [wiki](https://github.com/shoganaix/42Webserv/wiki)
+
 ## Project Description
 Webserv is a C++ HTTP server capable of handling multiple clients using `poll()`.  
 It parses HTTP requests according to the standard, serves static files, handles error pages, and can implement multiple server configurations using a `.conf` file.  
 HTTP Message can be either a request or response.
+
+For more detailed information, refer to the [**subject**](https://github.com/shoganaix/42Webserv/blob/main/en.subject.pdf)
 
 ### HTTP Request
 An HTTP request consists of a request line, headers, and an optional message body. Here is an example of an HTTP request:
