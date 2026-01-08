@@ -3,10 +3,10 @@
 /*                                                        :::      ::::::::   */
 /*   main.cpp                                           :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: msoriano <msoriano@student.42.fr>          +#+  +:+       +#+        */
+/*   By: angnavar <angnavar@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2025/12/10 20:21:26 by msoriano          #+#    #+#             */
-/*   Updated: 2025/12/10 20:26:46 by msoriano         ###   ########.fr       */
+/*   Updated: 2026/01/08 18:57:18 by angnavar         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -16,12 +16,12 @@
 
 int main(int argc, char **argv)
 {
-	// Logger::setState(OFF);
 	if (argc == 1 || argc == 2) 
     {
 		try 
 		{
-            std::string configFile = argv[1];
+			std::string		configFile;
+			configFile = (argc == 1 ? "configs/default.conf" : argv[1]);
             Webserv server(configFile);
             server.run();
 		}

@@ -1,29 +1,27 @@
 /* ************************************************************************** */
 /*                                                                            */
 /*                                                        :::      ::::::::   */
-/*   webserv.hpp                                        :+:      :+:    :+:   */
+/*   webserv.cpp                                        :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
 /*   By: angnavar <angnavar@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
-/*   Created: 2025/12/10 20:21:23 by msoriano          #+#    #+#             */
-/*   Updated: 2026/01/08 18:53:20 by angnavar         ###   ########.fr       */
+/*   Created: 2026/01/08 18:51:13 by angnavar          #+#    #+#             */
+/*   Updated: 2026/01/08 19:00:14 by angnavar         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
-#ifndef WEBSERV_HPP
-#define WEBSERV_HPP
+#include "webserv.hpp"
 
-#include <exception>
-#include <iostream>
-
-class Webserv
+Webserv::Webserv(const std::string &configFile)
 {
-    public:
-        Webserv(const std::string &configFile);
+	std::cout << "Webserv initialized with config: " << configFile << std::endl;
+}
 
-        void run();
+void Webserv::run()
+{
+	std::cout << "Webserv running..." << std::endl;
+	while(true)
+	{
 
-        ~Webserv() {}
-};
-
-#endif
+	}
+}
