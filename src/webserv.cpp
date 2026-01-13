@@ -3,10 +3,10 @@
 /*                                                        :::      ::::::::   */
 /*   webserv.cpp                                        :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: angnavar <angnavar@student.42madrid.com    +#+  +:+       +#+        */
+/*   By: kpineda- <kpineda-@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/01/08 18:51:13 by angnavar          #+#    #+#             */
-/*   Updated: 2026/01/08 19:00:14 by angnavar         ###   ########.fr       */
+/*   Updated: 2026/01/13 18:51:06 by kpineda-         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -14,14 +14,18 @@
 
 Webserv::Webserv(const std::string &configFile)
 {
-	std::cout << "Webserv initialized with config: " << configFile << std::endl;
+	std::cout << BLUE << "Webserv initialized with config: " << RESET << configFile << std::endl;
+	
 }
+
+
+
 
 void Webserv::run()
 {
-	std::cout << "Webserv running..." << std::endl;
+	std::cout << GREEN << "Webserv running..." << RESET <<std::endl;
 	while(true)
 	{
-
+		
 	}
 }

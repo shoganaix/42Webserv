@@ -3,10 +3,10 @@
 /*                                                        :::      ::::::::   */
 /*   webserv.hpp                                        :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: angnavar <angnavar@student.42madrid.com    +#+  +:+       +#+        */
+/*   By: kpineda- <kpineda-@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2025/12/10 20:21:23 by msoriano          #+#    #+#             */
-/*   Updated: 2026/01/08 18:53:20 by angnavar         ###   ########.fr       */
+/*   Updated: 2026/01/13 18:28:15 by kpineda-         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -15,15 +15,37 @@
 
 #include <exception>
 #include <iostream>
+#include "colors.hpp"
+
+struct location
+{
+    
+};
+
+struct Config
+{
+    int port;
+    int max_size;
+    std::string host;
+    std::string server_name;
+    std::string root;
+    std::string index;
+    std::string error_page;
+    location *locations;
+};
 
 class Webserv
 {
-    public:
-        Webserv(const std::string &configFile);
+    Config config;
 
-        void run();
+public:
 
-        ~Webserv() {}
+    Webserv(const std::string &configFile);
+    ~Webserv() {};
+
+    void run();
+
+    
 };
 
 #endif
