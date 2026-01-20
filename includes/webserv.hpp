@@ -3,10 +3,10 @@
 /*                                                        :::      ::::::::   */
 /*   webserv.hpp                                        :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: kpineda- <kpineda-@student.42madrid.com    +#+  +:+       +#+        */
+/*   By: angnavar <angnavar@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2025/12/10 20:21:23 by msoriano          #+#    #+#             */
-/*   Updated: 2026/01/13 18:28:15 by kpineda-         ###   ########.fr       */
+/*   Updated: 2026/01/20 16:01:25 by angnavar         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -16,27 +16,38 @@
 #include <exception>
 #include <iostream>
 #include "colors.hpp"
+#include <map>
+#include <vector>
 
-struct location
+struct Location
 {
-    
+    bool autoindex;
+    std::string path;
+    std::string root;
+    std::string index;
+    std::string redir;
+    std::string upload_path;
+    std::vector<std::string> allow_methods;
+    std::map<std::string, std::string> cgi_needs;
 };
 
 struct Config
 {
     int port;
     int max_size;
+	long client_max_body_size;
     std::string host;
-    std::string server_name;
     std::string root;
     std::string index;
-    std::string error_page;
-    location *locations;
+    std::string server_name;
+	std::vector<Location> locations;
+    std::map<int, std::string> error_pages;
 };
 
 class Webserv
 {
-    Config config;
+    std::vector<Config> config;
+	std::vector<int> fds;
 
 public:
 
