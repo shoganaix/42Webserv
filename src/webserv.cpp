@@ -3,10 +3,10 @@
 /*                                                        :::      ::::::::   */
 /*   webserv.cpp                                        :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: angnavar <angnavar@student.42madrid.com    +#+  +:+       +#+        */
+/*   By: kpineda- <kpineda-@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/01/08 18:51:13 by angnavar          #+#    #+#             */
-/*   Updated: 2026/01/20 16:01:32 by angnavar         ###   ########.fr       */
+/*   Updated: 2026/01/20 18:08:33 by kpineda-         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -19,10 +19,16 @@ Webserv::Webserv(const std::string &configFile)
 }
 
 
+void Webserv::setSockets()
+{
+	
+}
 
 
 void Webserv::run()
 {
+	setSockets();
+	
 	std::cout << GREEN << "Webserv running..." << RESET <<std::endl;
 	while(true)
 	{

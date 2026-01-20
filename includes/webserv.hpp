@@ -3,10 +3,10 @@
 /*                                                        :::      ::::::::   */
 /*   webserv.hpp                                        :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: angnavar <angnavar@student.42madrid.com    +#+  +:+       +#+        */
+/*   By: kpineda- <kpineda-@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2025/12/10 20:21:23 by msoriano          #+#    #+#             */
-/*   Updated: 2026/01/20 16:01:25 by angnavar         ###   ########.fr       */
+/*   Updated: 2026/01/20 18:27:43 by kpineda-         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -18,6 +18,7 @@
 #include "colors.hpp"
 #include <map>
 #include <vector>
+#include <sys/socket.h>
 
 struct Location
 {
@@ -56,6 +57,9 @@ public:
 
     void run();
 
+private:
+
+    void setSockets();
     
 };
 
