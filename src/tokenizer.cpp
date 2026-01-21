@@ -6,39 +6,69 @@
 /*   By: usuario <usuario@student.42.fr>            +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/01/20 15:46:08 by usuario           #+#    #+#             */
-/*   Updated: 2026/01/20 15:46:09 by usuario          ###   ########.fr       */
+/*   Updated: 2026/01/21 00:47:07 by usuario          ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
-#include "tokenizer.hpp"
-#include <cctype>
+/*-----------------------------------------------------------------------
+ *                          🌪️TOKENIZER🌪️
+ *
+ * This tokenizer converts the raw .conf file into meaningful tokens 
+ * It removes irrelevant characters (spaces or #) and separates 
+ * special characters 
+ * ('{' ,  '}' ,  ';')
+ * 
+ * This step simplifies logic and saves it into our token struct to
+ * operate on a clean and normalized token stream
+ * -----------------------------------------------------------------------
+ */
 
-std::vector<std::string> Tokenizer::tokenize(const std::string& content) {
-    std::vector<std::string> tokens;
-    std::string current;
+#include "../includes/tokenizer.hpp"
 
-    for (size_t i = 0; i < content.size(); ++i) {
-        char c = content[i];
+std::vector<Token> Tokenizer::tokenize(const std::string& path)
+{
+    std::ifstream file(path.c_str());
+    if (!file.is_open())
+        throw (std::runtime_error("Cannot open config file"));
 
-        if (isspace(c)) {
-            if (!current.empty()) {
-                tokens.push_back(current);
-                current.clear();
+    std::vector<Token> tokens;
+    std::string line;
+    int i = 0;
+
+    while (std::getline(file, line)) 
+    {
+        i++;
+        std::string current;
+
+        for (size_t j = 0; j < line.size(); j++) 
+        {
+            char c = line[j];
+
+            if (c == '#')
+                break;
+
+            if (std::isspace(c)) 
+            {
+                if (!current.empty()) 
+                {
+                    tokens.push_back(Token(current, i));
+                    current.clear();
+                }
             }
-        }
-        else if (c == '{' || c == '}' || c == ';') {
-            if (!current.empty()) {
-                tokens.push_back(current);
-                current.clear();
+            else if (c == '{' || c == '}' || c == ';') 
+            {
+                if (!current.empty()) 
+                {
+                    tokens.push_back(Token(current, i));
+                    current.clear();
+                }
+                tokens.push_back(Token(std::string(1, c), i));
             }
-            tokens.push_back(std::string(1, c));
+            else 
+                current += c;
         }
-        else {
-            current += c;
-        }
+        if (!current.empty())
+            tokens.push_back(Token(current, i));
     }
-    if (!current.empty())
-        tokens.push_back(current);
-
-    return tokens;
+    return (tokens);
 }

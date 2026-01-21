@@ -1,35 +1,20 @@
 /* ************************************************************************** */
 /*                                                                            */
 /*                                                        :::      ::::::::   */
-/*   tokenizer.hpp                                      :+:      :+:    :+:   */
+/*   utils.cpp                                          :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
 /*   By: usuario <usuario@student.42.fr>            +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
-/*   Created: 2026/01/21 00:17:06 by usuario           #+#    #+#             */
-/*   Updated: 2026/01/21 01:03:56 by usuario          ###   ########.fr       */
+/*   Created: 2026/01/21 00:44:52 by usuario           #+#    #+#             */
+/*   Updated: 2026/01/21 00:52:15 by usuario          ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
-#ifndef TOKENIZER_HPP
-#define TOKENIZER_HPP
+#include "../includes/utils.hpp"
 
-#include <vector>
-#include <string>
-#include <iostream>
-#include <fstream>
-
-struct Token 
+std::string intToString(int n)
 {
-    std::string value;
-    int line;
-
-    Token(const std::string& v, int l) : value(v), line(l) {}
-};
-
-class Tokenizer 
-{
-    public:
-        static std::vector<Token> tokenize(const std::string& path);
-};
-
-#endif
+    std::ostringstream oss;
+    oss << n;
+    return oss.str();
+}

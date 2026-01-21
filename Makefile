@@ -6,7 +6,11 @@ INC_DIR 	= includes
 CPPFLAGS 	= -Wall -Wextra -Werror $(STD) -I$(INC_DIR)
 
 # common
-SRC =  src/main.cpp src/webserv.cpp \
+SRC =  src/main.cpp \
+		src/webserv.cpp \
+		src/tokenizer.cpp \
+		src/configParser.cpp \
+		src/utils.cpp \
 
 OBJ = $(SRC:%.cpp=build/%.o)
 
