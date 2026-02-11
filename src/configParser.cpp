@@ -6,7 +6,7 @@
 /*   By: usuario <usuario@student.42.fr>            +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/01/21 00:25:24 by usuario           #+#    #+#             */
-/*   Updated: 2026/02/11 21:09:27 by usuario          ###   ########.fr       */
+/*   Updated: 2026/02/11 21:43:30 by usuario          ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -29,6 +29,7 @@
 #include "../includes/configParser.hpp"
 #include "../includes/tokenizer.hpp"
 #include "../includes/utils.hpp"
+#include "../includes/validation.hpp"
 
 /*
  * Returns the current token pointed by the parser cursor
@@ -291,6 +292,7 @@ std::vector<Config> ConfigParser::parse(const std::string& path)
         Config cfg;
         parseServer(cfg);
         normalizeServer(cfg);
+        validateServer(cfg);
         servers.push_back(cfg);
     }
     return (servers);

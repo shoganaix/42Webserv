@@ -13,8 +13,9 @@ CPPFLAGS 	= -Wall -Wextra -Werror $(STD) -I$(INC_DIR)
 # common
 SRC =  src/main.cpp \
 		src/webserv.cpp \
-		src/tokenizer.cpp \
 		src/configParser.cpp \
+		src/tokenizer.cpp \
+		src/validation.cpp \
 		src/utils.cpp \
 		src/debug.cpp 
 

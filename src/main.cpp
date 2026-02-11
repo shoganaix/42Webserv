@@ -6,7 +6,7 @@
 /*   By: usuario <usuario@student.42.fr>            +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2025/12/10 20:21:26 by msoriano          #+#    #+#             */
-/*   Updated: 2026/02/11 21:14:40 by usuario          ###   ########.fr       */
+/*   Updated: 2026/02/11 21:34:00 by usuario          ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -43,6 +43,7 @@ int main(int argc, char **argv)
             return (0);
         #endif
     }
+    //--------------------------------------------------------------
     catch (const std::exception& e)
     {
         std::cerr << RED << "Error: " << RESET << e.what() << "\n";

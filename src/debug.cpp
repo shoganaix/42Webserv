@@ -6,15 +6,13 @@
 /*   By: usuario <usuario@student.42.fr>            +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/02/11 20:53:33 by usuario           #+#    #+#             */
-/*   Updated: 2026/02/11 21:20:51 by usuario          ###   ########.fr       */
+/*   Updated: 2026/02/11 21:34:35 by usuario          ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
 #include "../includes/debug.hpp"
 
-// TESTING CONF PARSER (DELETE LATER)
-//-----------------------------------------------------------------------------------------
-//-----------------------------------------------------------------------------------------
+// -------------------------------TESTING MULTI-SERVER CONF PARSER-------------------------
 static void printLocation(const Location& loc)
 {
     std::cout << "    " << YELLOW << "\n--- Location " << RESET << loc.path << std::endl;
@@ -85,3 +83,4 @@ void printAllConfigs(const std::vector<Config>& cfgs)
         printConfig(cfgs[i]);
     }
 }
+//-----------------------------------------------------------------------------------------
