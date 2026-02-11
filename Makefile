@@ -1,3 +1,8 @@
+# --------------COMMENTS-----------------
+# make → build normal
+# make debug → build debug 
+# ---------------------------------------
+
 NAME = webserv
 
 CPP	 		= c++
@@ -11,6 +16,7 @@ SRC =  src/main.cpp \
 		src/tokenizer.cpp \
 		src/configParser.cpp \
 		src/utils.cpp \
+		src/debug.cpp 
 
 OBJ = $(SRC:%.cpp=build/%.o)
 
@@ -50,5 +56,8 @@ fclean: clean
 	@$(RM) $(NAME)
 
 re: fclean all
+
+debug: CPPFLAGS += -DDEBUG
+debug: re
 
 .PHONY: all clean fclean re test

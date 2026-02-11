@@ -6,7 +6,7 @@
 /*   By: usuario <usuario@student.42.fr>            +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/01/21 00:25:24 by usuario           #+#    #+#             */
-/*   Updated: 2026/01/21 01:29:21 by usuario          ###   ########.fr       */
+/*   Updated: 2026/02/11 21:09:27 by usuario          ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -141,6 +141,7 @@ void ConfigParser::parseServerDirective(Config& cfg)
  *         - root
  *         - index
  *         - return
+ *         - upload_path
  *         - allow_methods
  *         - cgi_path / cgi_ext
  *
@@ -178,6 +179,12 @@ void ConfigParser::parseLocation(Config& cfg)
         else if (accept("return"))
         {
             loc.redir = current().value;
+            pos++;
+            expect(";");
+        }
+        else if (accept("upload_path"))
+        {
+            loc.upload_path = current().value;
             pos++;
             expect(";");
         }
@@ -237,19 +244,54 @@ void ConfigParser::parseServer(Config& cfg)
             parseServerDirective(cfg);
     }
 }
+/*
+ * - Ensures server conf has valid default values (ex. root or index not defined)
+ * - Assigns "." as default root and "index.html" as default index when missing
+ * - Applies inheritance through Location blocks so they use server's root and index if not defined
+ * - Sets "GET" as default allowed HTTP method when no other methods specified
+ */
+static void normalizeServer(Config& cfg)
+{
+    if (cfg.root.empty())
+        cfg.root = ".";
+    if (cfg.index.empty())
+        cfg.index = "index.html";
+
+    for (size_t i = 0; i < cfg.locations.size(); ++i)
+    {
+        Location& loc = cfg.locations[i];
+
+        if (loc.root.empty())
+            loc.root = cfg.root;
+
+        if (loc.index.empty())
+            loc.index = cfg.index;
+
+        if (loc.allow_methods.empty())
+            loc.allow_methods.push_back("GET");
+    }
+}
 
 /*
  * - Tokenizes the configuration file
- * - Resets the parser cursor
- * - Parses the server block
+ * - Resets the parser cursor (pos = 0)
+ * - Iterates over the token stream and parses ONE OR MORE server block/s
+ * - [normalizeServer] -> Applies default values and inheritance rules to ensure 
+ *                      server and its locations have usable configuration settings
  * - Returns a fully populated Config structure
  */
-Config ConfigParser::parse(const std::string& path)
+std::vector<Config> ConfigParser::parse(const std::string& path)
 {
     tokens = Tokenizer::tokenize(path);
     pos = 0;
 
-    Config cfg;
-    parseServer(cfg);
-    return (cfg);
+    std::vector<Config> servers;
+    while (pos < tokens.size())
+    {
+        Config cfg;
+        parseServer(cfg);
+        normalizeServer(cfg);
+        servers.push_back(cfg);
+    }
+    return (servers);
 }

@@ -3,10 +3,10 @@
 /*                                                        :::      ::::::::   */
 /*   webserv.hpp                                        :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: kpineda- <kpineda-@student.42madrid.com    +#+  +:+       +#+        */
+/*   By: usuario <usuario@student.42.fr>            +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2025/12/10 20:21:23 by msoriano          #+#    #+#             */
-/*   Updated: 2026/01/20 18:27:43 by kpineda-         ###   ########.fr       */
+/*   Updated: 2026/02/11 20:19:40 by usuario          ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -22,6 +22,10 @@
 
 struct Location
 {
+    //In C++98, if you don't define a constructor, those fields can remain undefined
+    Location(): autoindex(false), path("/"), root(""), index(""), redir(""), upload_path("")
+    {}
+
     bool autoindex;
     std::string path;
     std::string root;
@@ -34,6 +38,12 @@ struct Location
 
 struct Config
 {
+    //In C++98, if you don't define a constructor, those fields can remain undefined
+    Config()
+        : port(8080), max_size(0), client_max_body_size(1000000), host("0.0.0.0"),
+        root(""), index("index.html"), server_name("")
+        {}
+
     int port;
     int max_size;
 	long client_max_body_size;

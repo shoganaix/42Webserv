@@ -6,7 +6,7 @@
 /*   By: usuario <usuario@student.42.fr>            +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/01/20 15:44:57 by usuario           #+#    #+#             */
-/*   Updated: 2026/01/21 00:51:39 by usuario          ###   ########.fr       */
+/*   Updated: 2026/02/11 20:21:06 by usuario          ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -23,7 +23,8 @@
 class ConfigParser 
 {
     public:
-        Config parse(const std::string& path);
+        //using vector to prepare multiple config files
+        std::vector<Config> parse(const std::string& path);
 
     private:
         std::vector<Token> tokens;
