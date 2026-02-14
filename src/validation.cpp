@@ -3,12 +3,28 @@
 /*                                                        :::      ::::::::   */
 /*   validation.cpp                                     :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: usuario <usuario@student.42.fr>            +#+  +:+       +#+        */
+/*   By: msoriano <msoriano@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/02/11 21:35:50 by usuario           #+#    #+#             */
-/*   Updated: 2026/02/11 22:06:27 by usuario          ###   ########.fr       */
+/*   Updated: 2026/02/14 13:36:02 by msoriano         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
+
+/*-----------------------------------------------------------------------
+ *                         🌪️CONFIG VALIDATION🌪️
+ *
+ * This module validates the correctness of the parsed config. Ensuring:
+ * 
+ *  - Ports are within valid range (1–65535)
+ *  - Required fields (host, root, index) are not empty
+ *  - HTTP methods are supported
+ *  - Error codes are valid (400–599)
+ *  - No duplicated location paths exist
+ *  - CGI extensions and handlers are correctly defined
+ *
+ * If any rule is violated, a std::runtime_error is thrown
+ * -----------------------------------------------------------------------
+ */
 
 #include "../includes/validation.hpp"
 #include "../includes/utils.hpp"        // intToString

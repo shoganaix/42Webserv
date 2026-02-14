@@ -3,16 +3,32 @@
 /*                                                        :::      ::::::::   */
 /*   debug.cpp                                          :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: usuario <usuario@student.42.fr>            +#+  +:+       +#+        */
+/*   By: msoriano <msoriano@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/02/11 20:53:33 by usuario           #+#    #+#             */
-/*   Updated: 2026/02/11 21:34:35 by usuario          ###   ########.fr       */
+/*   Updated: 2026/02/14 13:43:22 by msoriano         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
 #include "../includes/debug.hpp"
 
-// -------------------------------TESTING MULTI-SERVER CONF PARSER-------------------------
+/*-----------------------------------------------------------------------
+ *                      🖨️DEBUG: CONFIG PARSER🖨️
+ *
+ * This block of functions print the parsed configuration. We check:
+ * 
+ *  - Server blocks
+ *  - Location blocks
+ *  - Error pages
+ *  - Allowed HTTP methods
+ *  - CGI handlers
+ *
+ * This verifies that parsing and normalization were performed
+ * correctly before starting the server runtime
+ * -----------------------------------------------------------------------
+ */
+
+// ---------------------------- MULTI-SERVER CONF PARSER ------------------------
 static void printLocation(const Location& loc)
 {
     std::cout << "    " << YELLOW << "\n--- Location " << RESET << loc.path << std::endl;

@@ -3,12 +3,28 @@
 /*                                                        :::      ::::::::   */
 /*   main.cpp                                           :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: usuario <usuario@student.42.fr>            +#+  +:+       +#+        */
+/*   By: msoriano <msoriano@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2025/12/10 20:21:26 by msoriano          #+#    #+#             */
-/*   Updated: 2026/02/11 21:34:00 by usuario          ###   ########.fr       */
+/*   Updated: 2026/02/14 13:45:27 by msoriano         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
+
+/*-----------------------------------------------------------------------
+ *                          📂MAIN PROGRAM📂
+ * 
+ *  - Validates []args
+ *  - Determines which config file to load
+ *  - Parses and validates configuration
+ *  - (DEBUG mode) 
+ *      -> Print parsed configuration
+ *      -> ...
+ *  - Initializes Webserv engine
+ *
+ * If any exception occurs during parsing or runtime,
+ * it is caught and displayed before exiting safely.
+ * -----------------------------------------------------------------------
+ */
 
 #include "../includes/webserv.hpp"      
 #include "../includes/logger.hpp"       
@@ -29,21 +45,19 @@ int main(int argc, char **argv)
         return (1);
     }
     const std::string configFile = (argc == 1 ? "configs/default.conf" : argv[1]);
-    //--------------------------DEBUG PARSER------------------------
 	try 
 	{
+        ConfigParser parser;
+        std::vector<Config> cfgs = parser.parse(configFile);
+        //--------------------------DEBUG PARSER------------------------
         #ifdef DEBUG
-            ConfigParser parser;
-            std::vector<Config> cfgs = parser.parse(configFile);
             printAllConfigs(cfgs);
-            return (0);
-        #else
-            Webserv server(configFile);
-            server.run();
-            return (0);
         #endif
+        //--------------------------------------------------------------
+        Webserv server(configFile);
+        server.run();
+        return (0);
     }
-    //--------------------------------------------------------------
     catch (const std::exception& e)
     {
         std::cerr << RED << "Error: " << RESET << e.what() << "\n";

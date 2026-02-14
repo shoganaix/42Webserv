@@ -3,12 +3,30 @@
 /*                                                        :::      ::::::::   */
 /*   webserv.cpp                                        :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: usuario <usuario@student.42.fr>            +#+  +:+       +#+        */
+/*   By: msoriano <msoriano@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/01/08 18:51:13 by angnavar          #+#    #+#             */
-/*   Updated: 2026/02/11 20:36:25 by usuario          ###   ########.fr       */
+/*   Updated: 2026/02/14 13:44:43 by msoriano         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
+
+/*-----------------------------------------------------------------------
+ *                          🧠WEBSERV BRAIN🧠
+ *
+ * This class represents the main Webserver engine
+ *
+ * Responsibilities:
+ *  - Load and store parsed configuration
+ *  - Initialize listening sockets
+ *  - Manage the main event loop
+ *  - Handle client connections
+ * 	- ...
+ *
+ * The run() method starts the infinite event loop
+ * where the server waits for incoming connections
+ * and processes client events.
+ * -----------------------------------------------------------------------
+ */
 
 #include "webserv.hpp"
 #include "configParser.hpp"

@@ -3,15 +3,15 @@
 /*                                                        :::      ::::::::   */
 /*   tokenizer.cpp                                      :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: usuario <usuario@student.42.fr>            +#+  +:+       +#+        */
+/*   By: msoriano <msoriano@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/01/20 15:46:08 by usuario           #+#    #+#             */
-/*   Updated: 2026/01/21 00:47:07 by usuario          ###   ########.fr       */
+/*   Updated: 2026/02/14 13:34:11 by msoriano         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
 /*-----------------------------------------------------------------------
- *                          🌪️TOKENIZER🌪️
+ *                          🌪️CONFIG TOKENIZER🌪️
  *
  * This tokenizer converts the raw .conf file into meaningful tokens 
  * It removes irrelevant characters (spaces or #) and separates 
