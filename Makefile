@@ -16,6 +16,7 @@ SRC =  src/main.cpp \
 		src/configParser.cpp \
 		src/tokenizer.cpp \
 		src/validation.cpp \
+		src/matchLocation.cpp \
 		src/utils.cpp \
 		src/debug.cpp 
 

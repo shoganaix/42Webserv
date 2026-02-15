@@ -1,23 +1,21 @@
 /* ************************************************************************** */
 /*                                                                            */
 /*                                                        :::      ::::::::   */
-/*   debug.hpp                                          :+:      :+:    :+:   */
+/*   matchLocation.hpp                                  :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
 /*   By: msoriano <msoriano@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
-/*   Created: 2026/02/11 20:37:23 by usuario           #+#    #+#             */
-/*   Updated: 2026/02/15 12:18:08 by msoriano         ###   ########.fr       */
+/*   Created: 2026/02/14 14:00:09 by msoriano          #+#    #+#             */
+/*   Updated: 2026/02/15 11:43:43 by msoriano         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
-#ifndef DEBUG_HPP
-#define DEBUG_HPP
+#ifndef MATCHLOCATION_HPP
+#define MATCHLOCATION_HPP
 
+#include <string>
 #include "webserv.hpp"
-#include "colors.hpp"
 
-void printConfig(const Config &cfg);
-void printAllConfigs(const std::vector<Config> &cfgs);
-void debugTestLocationMatching(const std::vector<Config> &cfgs);
+const Location* matchLocation(const Config &cfg, const std::string &uri);
 
 #endif

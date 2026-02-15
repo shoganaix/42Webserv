@@ -6,11 +6,14 @@
 /*   By: msoriano <msoriano@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/02/11 20:53:33 by usuario           #+#    #+#             */
-/*   Updated: 2026/02/14 13:43:22 by msoriano         ###   ########.fr       */
+/*   Updated: 2026/02/15 14:32:22 by msoriano         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
 #include "../includes/debug.hpp"
+#include "../includes/matchLocation.hpp"
+#include "../includes/webserv.hpp"
+
 
 /*-----------------------------------------------------------------------
  *                      🖨️DEBUG: CONFIG PARSER🖨️
@@ -29,7 +32,7 @@
  */
 
 // ---------------------------- MULTI-SERVER CONF PARSER ------------------------
-static void printLocation(const Location& loc)
+static void printLocation(const Location &loc)
 {
     std::cout << "    " << YELLOW << "\n--- Location " << RESET << loc.path << std::endl;
     std::cout << "      Path: " << loc.path << std::endl;
@@ -61,7 +64,7 @@ static void printLocation(const Location& loc)
         }
     }
 }
-void printConfig(const Config& cfg)
+void printConfig(const Config &cfg)
 {
     std::cout << BLUE << "\n========== SERVER CONFIG =========="<< RESET << "\n";
     std::cout << "  Server name: " << cfg.server_name << std::endl;
@@ -90,7 +93,7 @@ void printConfig(const Config& cfg)
     std::cout << BLUE << "==================================="<< RESET << "\n";
 }
 
-void printAllConfigs(const std::vector<Config>& cfgs)
+void printAllConfigs(const std::vector<Config> &cfgs)
 {
     std::cout << GREEN << "Parsed servers: " << RESET << cfgs.size() << std::endl;
     for (size_t i = 0; i < cfgs.size(); ++i)
@@ -98,5 +101,46 @@ void printAllConfigs(const std::vector<Config>& cfgs)
         std::cout << GREEN << "--- Server #" << (i + 1) << RESET << std::endl;
         printConfig(cfgs[i]);
     }
+}
+//-----------------------------------------------------------------------------------------
+
+/*-----------------------------------------------------------------------
+ *                      🧪LOCATION MATCH TESTER🧪
+ *
+ * Simulates HTTP request URIs and verifies that the
+ * location matching algorithm selects the correct location
+ * -----------------------------------------------------------------------
+ */
+// ---------------------------- URI / LOC PATH-MATCHING MINITEST ------------------------
+void debugTestLocationMatching(const std::vector<Config> &cfgs)
+{
+    std::cout << BLUE << "\n======= LOCATION MATCH TEST =======\n" << RESET;
+
+    // Simulated URIs (replicating real HTTP requests)
+    std::vector<std::string> testUris;
+    testUris.push_back("/");
+    testUris.push_back("/tours");
+    testUris.push_back("/tours/summer.html");
+    testUris.push_back("/red");
+    testUris.push_back("/cgi-bin/time.py");
+    testUris.push_back("/unknown/path");
+
+
+    for (size_t i = 0; i < cfgs.size(); ++i)
+    {
+        std::cout << YELLOW << "\nServer #" << i + 1 << RESET << std::endl;
+
+        for (size_t j = 0; j < testUris.size(); ++j)
+        {
+            const Location* loc = matchLocation(cfgs[i], testUris[j]);
+
+            std::cout << "URI: " << testUris[j]
+                      << " -> matched: "
+                      << (loc ? loc->path : "NULL")
+                      << std::endl;
+        }
+    }
+
+    std::cout << BLUE << "===================================\n" << RESET;
 }
 //-----------------------------------------------------------------------------------------

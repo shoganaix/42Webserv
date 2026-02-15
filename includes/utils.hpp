@@ -3,10 +3,10 @@
 /*                                                        :::      ::::::::   */
 /*   utils.hpp                                          :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: usuario <usuario@student.42.fr>            +#+  +:+       +#+        */
+/*   By: msoriano <msoriano@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/01/21 00:49:35 by usuario           #+#    #+#             */
-/*   Updated: 2026/01/21 00:51:26 by usuario          ###   ########.fr       */
+/*   Updated: 2026/02/14 13:52:02 by msoriano         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -14,7 +14,7 @@
 #define UTILS_HPP
 
 #include <string>
-#include <sstream>  // working with files
+#include <sstream>  // works with files
 
 std::string intToString(int n);
 
