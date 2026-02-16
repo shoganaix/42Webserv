@@ -3,10 +3,10 @@
 /*                                                        :::      ::::::::   */
 /*   webserv.hpp                                        :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: msoriano <msoriano@student.42.fr>          +#+  +:+       +#+        */
+/*   By: usuario <usuario@student.42.fr>            +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2025/12/10 20:21:23 by msoriano          #+#    #+#             */
-/*   Updated: 2026/02/14 13:45:09 by msoriano         ###   ########.fr       */
+/*   Updated: 2026/02/16 13:27:29 by usuario          ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -15,6 +15,7 @@
 
 #include <exception>
 #include <iostream>
+#include <string>
 #include "colors.hpp"
 #include <map>
 #include <vector>
@@ -23,6 +24,7 @@
 struct Location
 {
     //In C++98, if you don't define a constructor, those fields can remain undefined
+    // (Memory garbage → random errors)
     Location(): autoindex(false), path("/"), root(""), index(""), redir(""), upload_path("")
     {}
 

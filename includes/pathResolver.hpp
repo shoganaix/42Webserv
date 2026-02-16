@@ -1,25 +1,27 @@
 /* ************************************************************************** */
 /*                                                                            */
 /*                                                        :::      ::::::::   */
-/*   debug.hpp                                          :+:      :+:    :+:   */
+/*   pathResolver.hpp                                   :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
 /*   By: usuario <usuario@student.42.fr>            +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
-/*   Created: 2026/02/11 20:37:23 by usuario           #+#    #+#             */
-/*   Updated: 2026/02/16 13:39:49 by usuario          ###   ########.fr       */
+/*   Created: 2026/02/16 12:51:20 by usuario           #+#    #+#             */
+/*   Updated: 2026/02/16 13:33:50 by usuario          ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
-#ifndef DEBUG_HPP
-#define DEBUG_HPP
+#ifndef PATHRESOLVER_HPP
+#define PATHRESOLVER_HPP
 
 #include "webserv.hpp"
-#include "colors.hpp"
 
-void printConfig(const Config &cfg);
-void printAllConfigs(const std::vector<Config> &cfgs);
-void debugTestLocationMatching(const std::vector<Config> &cfgs);
-void debugTestPathResolution(const std::vector<Config> &cfgs);
-void debugTestRoutingAndResolution(const std::vector<Config> &cfgs);
+struct ResolvedPath
+{
+    std::string fsPath;     // FILESYSTEM path (root + resPath)
+    std::string resPath;    // REST path (URI part after location prefix)
+    bool appendIndex;       // true if URI ends with '/' -> then, appended loc.index
+};
+
+ResolvedPath resolvePath(const Location& loc, const std::string& uriPath);
 
 #endif

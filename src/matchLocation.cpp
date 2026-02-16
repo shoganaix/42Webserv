@@ -3,10 +3,10 @@
 /*                                                        :::      ::::::::   */
 /*   matchLocation.cpp                                  :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: msoriano <msoriano@student.42.fr>          +#+  +:+       +#+        */
+/*   By: usuario <usuario@student.42.fr>            +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/02/14 13:51:36 by msoriano          #+#    #+#             */
-/*   Updated: 2026/02/15 12:16:46 by msoriano         ###   ########.fr       */
+/*   Updated: 2026/02/16 13:33:48 by usuario          ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -22,6 +22,13 @@
  *
  * The location determines: Root directory, Allowed HTTP methods, Redirections,
  *  CGI execution rules and Upload behavior
+ * -----------------------------------------------------------------------
+ */
+
+  /*             ⚠️ · 🚨 · 📌 IMPORTANT ⚠️ · 🚨 · 📌
+ * -----------------------------------------------------------------------
+ * `matchLocation(CONFIG, URI)`-> which location governs that URI
+ * `resolvePath(LOC, URI)`-> which file on disk corresponds to that URI
  * -----------------------------------------------------------------------
  */
 

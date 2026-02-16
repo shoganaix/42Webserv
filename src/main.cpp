@@ -3,10 +3,10 @@
 /*                                                        :::      ::::::::   */
 /*   main.cpp                                           :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: msoriano <msoriano@student.42.fr>          +#+  +:+       +#+        */
+/*   By: usuario <usuario@student.42.fr>            +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2025/12/10 20:21:26 by msoriano          #+#    #+#             */
-/*   Updated: 2026/02/15 12:19:03 by msoriano         ###   ########.fr       */
+/*   Updated: 2026/02/16 13:40:02 by usuario          ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -52,7 +52,9 @@ int main(int argc, char **argv)
         //--------------------------DEBUG PARSER------------------------
         #ifdef DEBUG
             printAllConfigs(cfgs);
-            debugTestLocationMatching(cfgs);
+            //debugTestLocationMatching(cfgs);
+            //debugTestPathResolution(cfgs);
+            debugTestRoutingAndResolution(cfgs);
         #endif
         //--------------------------------------------------------------
         Webserv server(configFile);
