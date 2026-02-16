@@ -3,10 +3,10 @@
 /*                                                        :::      ::::::::   */
 /*   webserv.cpp                                        :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: usuario <usuario@student.42.fr>            +#+  +:+       +#+        */
+/*   By: angnavar <angnavar@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/01/08 18:51:13 by angnavar          #+#    #+#             */
-/*   Updated: 2026/02/16 16:14:16 by usuario          ###   ########.fr       */
+/*   Updated: 2026/02/16 22:59:40 by angnavar         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -64,6 +64,35 @@
     	//     1. Create socket, set O_NONBLOCK, bind host:port, listen
     	//     2. Add to poll fd vector
     	//     3. Keep a map listeningFd -> serverIndex
+		for (size_t i = 0; i < this->config.size(); ++i)
+		{
+			int fd = socket(AF_INET, SOCK_STREAM, 0);
+			if (fd < 0) continue;
+
+			int opt = 1;
+			setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
+			fcntl(fd, F_SETFL, O_NONBLOCK);
+			sockaddr_in addr;
+			std::memset(&addr, 0, sizeof(addr));
+			addr.sin_family = AF_INET;
+			addr.sin_port = htons(config[i].port);
+			addr.sin_addr.s_addr = inet_addr(config[i].host.c_str());
+
+			if (bind(fd, (struct sockaddr *)&addr, sizeof(addr)) < 0)
+			{
+				std::cerr << "Error binding port " << config[i].port << std::endl;
+				close(fd);
+				continue;
+			}
+
+			if (listen(fd, 128) < 0)
+			{
+				close(fd);
+				continue;
+			}
+
+			fds.push_back(fd);
+		}
 	}
 
 	/*
