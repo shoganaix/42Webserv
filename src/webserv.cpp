@@ -6,7 +6,7 @@
 /*   By: angnavar <angnavar@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/01/08 18:51:13 by angnavar          #+#    #+#             */
-/*   Updated: 2026/02/16 22:59:40 by angnavar         ###   ########.fr       */
+/*   Updated: 2026/02/19 21:38:32 by angnavar         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -72,15 +72,25 @@
 			int opt = 1;
 			setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
 			fcntl(fd, F_SETFL, O_NONBLOCK);
-			sockaddr_in addr;
-			std::memset(&addr, 0, sizeof(addr));
-			addr.sin_family = AF_INET;
-			addr.sin_port = htons(config[i].port);
-			addr.sin_addr.s_addr = inet_addr(config[i].host.c_str());
 
-			if (bind(fd, (struct sockaddr *)&addr, sizeof(addr)) < 0)
+			addrinfo hints, *res;
+			std::memset(&hints, 0, sizeof(hints));
+			hints.ai_family = AF_INET; // IPv4
+			hints.ai_socktype = SOCK_STREAM;
+
+			if (getaddrinfo(config[i].host.c_str(), NULL, &hints, &res) == 0)
 			{
-				std::cerr << "Error binding port " << config[i].port << std::endl;
+				std::cerr << "Error binding port " << config[i].port << " " << strerror(errno) << std::endl;
+				// error handler
+			}
+			
+			sockaddr_in *addr = (struct sockaddr_in *)res->ai_addr;
+			addr->sin_port = htons(config[i].port);
+
+			if (bind(fd, res->ai_addr, res->ai_addrlen) < 0)
+			{
+				std::cerr << "Error binding port " << config[i].port << ": " << strerror(errno) << std::endl;
+				freeaddrinfo(res);
 				close(fd);
 				continue;
 			}
@@ -91,6 +101,7 @@
 				continue;
 			}
 
+			freeaddrinfo(res);
 			fds.push_back(fd);
 		}
 	}
@@ -116,8 +127,8 @@
 		setSockets();
 		
 		std::cout << GREEN << "Webserv running..." << RESET <<std::endl;
-		while(true)
-		{
+		//while(true)
+		//{
 			/*int ret = poll(fds.data(), fds.size(), -1); 
 			if (ret < 0) throw std::runtime_error("poll error");
 
@@ -153,6 +164,6 @@
 			// - 7. Send response:
 	  		//     * write() response to client socket (non-blocking)
 	   		//     * close or keep-alive depending on headers
-
-		}
+			
+		//}
 	}

@@ -6,7 +6,7 @@
 /*   By: angnavar <angnavar@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2025/12/10 20:21:23 by msoriano          #+#    #+#             */
-/*   Updated: 2026/02/16 22:59:27 by angnavar         ###   ########.fr       */
+/*   Updated: 2026/02/19 20:39:40 by angnavar         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -33,6 +33,7 @@
 #include <cstring>       // memset(), strerror()
 #include <cstdlib>       // atoi(), exit(), getenv()
 #include <cstdio>        // perror()
+#include <netdb.h>
 
 #include <sys/socket.h>  // socket(), bind(), listen(), accept(), etc.
 #include <netinet/in.h>  // struct sockaddr_in
