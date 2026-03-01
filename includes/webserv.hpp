@@ -6,7 +6,7 @@
 /*   By: angnavar <angnavar@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2025/12/10 20:21:23 by msoriano          #+#    #+#             */
-/*   Updated: 2026/02/20 19:59:46 by angnavar         ###   ########.fr       */
+/*   Updated: 2026/03/01 11:39:26 by angnavar         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -95,6 +95,9 @@ public:
 private:
 
     void setSockets();
+	bool isListeningFd(int fd);
+	void acceptNewConnection(int fd);
+	void handleClient(int fd);
     
 };
 
