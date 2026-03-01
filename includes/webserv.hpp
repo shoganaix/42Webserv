@@ -3,10 +3,10 @@
 /*                                                        :::      ::::::::   */
 /*   webserv.hpp                                        :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: angnavar <angnavar@student.42.fr>          +#+  +:+       +#+        */
+/*   By: angnavar <angnavar@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2025/12/10 20:21:23 by msoriano          #+#    #+#             */
-/*   Updated: 2026/02/19 20:39:40 by angnavar         ###   ########.fr       */
+/*   Updated: 2026/02/20 19:59:46 by angnavar         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -80,8 +80,10 @@ struct Config
 
 class Webserv
 {
-    std::vector<Config> config;
-	std::vector<int> fds;
+	int						epollFd;
+	std::vector<int> 		fds;
+    std::vector<Config>		config;
+	std::map<int, Config>	fdToConfig;
 
 public:
 

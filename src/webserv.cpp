@@ -3,10 +3,10 @@
 /*                                                        :::      ::::::::   */
 /*   webserv.cpp                                        :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: angnavar <angnavar@student.42.fr>          +#+  +:+       +#+        */
+/*   By: angnavar <angnavar@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/01/08 18:51:13 by angnavar          #+#    #+#             */
-/*   Updated: 2026/02/19 21:38:32 by angnavar         ###   ########.fr       */
+/*   Updated: 2026/03/01 11:17:34 by angnavar         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -64,11 +64,16 @@
     	//     1. Create socket, set O_NONBLOCK, bind host:port, listen
     	//     2. Add to poll fd vector
     	//     3. Keep a map listeningFd -> serverIndex
+		epollFd = epoll_create1(0); 
+		if (epollFd < 0)
+		{
+			std::cerr << RED << "Error epoll create: " << strerror(errno) << RESET << std::endl;
+		}
+
 		for (size_t i = 0; i < this->config.size(); ++i)
 		{
 			int fd = socket(AF_INET, SOCK_STREAM, 0);
 			if (fd < 0) continue;
-
 			int opt = 1;
 			setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
 			fcntl(fd, F_SETFL, O_NONBLOCK);
@@ -78,9 +83,9 @@
 			hints.ai_family = AF_INET; // IPv4
 			hints.ai_socktype = SOCK_STREAM;
 
-			if (getaddrinfo(config[i].host.c_str(), NULL, &hints, &res) == 0)
+			if (getaddrinfo(config[i].host.c_str(), NULL, &hints, &res) != 0)
 			{
-				std::cerr << "Error binding port " << config[i].port << " " << strerror(errno) << std::endl;
+				std::cerr << RED << "Error binding port " << config[i].port << " " << strerror(errno) << RESET << std::endl;
 				// error handler
 			}
 			
@@ -89,20 +94,35 @@
 
 			if (bind(fd, res->ai_addr, res->ai_addrlen) < 0)
 			{
-				std::cerr << "Error binding port " << config[i].port << ": " << strerror(errno) << std::endl;
+				std::cerr << RED << "Error binding port " << config[i].port << ": " << strerror(errno) << RESET << std::endl;
 				freeaddrinfo(res);
 				close(fd);
 				continue;
 			}
+			freeaddrinfo(res);
 
 			if (listen(fd, 128) < 0)
 			{
+				std::cerr << RED << "Error listen fd: " << strerror(errno) << RESET << std::endl;
 				close(fd);
 				continue;
 			}
 
-			freeaddrinfo(res);
-			fds.push_back(fd);
+			struct epoll_event ev;
+			std::memset(&ev, 0, sizeof(ev));
+			ev.events = EPOLLIN;
+			ev.data.fd = fd;
+
+			if (epoll_ctl(epollFd, EPOLL_CTL_ADD, fd, &ev) < 0)
+			{
+				std::cerr << "Error epoll_ctl" << std::endl;
+				close(fd);
+				continue;
+        	}
+
+			this->fdToConfig[fd] = this->config[i];
+			this->fds.push_back(fd);
+			std::cout << PURPLE << "Server [" << config[i].server_name << "] listening on port " << config[i].port << RESET << std::endl;
 		}
 	}
 
