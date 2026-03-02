@@ -1,7 +1,14 @@
-# --------------COMMENTS-----------------
-# make → build normal
-# make debug → build debug 
-# ---------------------------------------
+# **************************************************************************** #
+#                                                                              #
+#                                                         :::      ::::::::    #
+#    Makefile                                           :+:      :+:    :+:    #
+#                                                     +:+ +:+         +:+      #
+#    By: kpineda- <kpineda-@student.42madrid.com    +#+  +:+       +#+         #
+#                                                 +#+#+#+#+#+   +#+            #
+#    Created: 2026/03/02 16:37:10 by kpineda-          #+#    #+#              #
+#    Updated: 2026/03/02 16:38:46 by kpineda-         ###   ########.fr        #
+#                                                                              #
+# **************************************************************************** #
 
 NAME = webserv
 
@@ -11,15 +18,8 @@ INC_DIR 	= includes
 CPPFLAGS 	= -Wall -Wextra -Werror $(STD) -I$(INC_DIR)
 
 # common
-SRC =  src/main.cpp \
-		src/webserv.cpp \
-		src/configParser.cpp \
-		src/tokenizer.cpp \
-		src/validation.cpp \
-		src/matchLocation.cpp \
-		src/pathResolver.cpp \
-		src/utils.cpp \
-		src/debug.cpp 
+SRC =  main.cpp \
+	   HttpResponse.cpp \
 
 OBJ = $(SRC:%.cpp=build/%.o)
 
