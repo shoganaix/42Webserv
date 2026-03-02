@@ -57,13 +57,13 @@ Content-Length: 1234
 ## HTTP Methods
 Method        | Description  
 ------------- | -------------
-GET           | Retrieve a specific resource or a collection of resources, should not affect the data/resource
-POST          | Perform resource-specific processing on the request content
-PUT           | Replace an existing resource or create a new resource at a specific URL
-DELETE        | Remove the specified resource
-HEAD          | Same as GET, but returns only headers without the body
-OPTIONS       | Describe the communication options for the target resource
-PATCH         | Apply partial modifications to a resource
+GET ✔️        | Retrieve a specific resource or a collection of resources, should not affect the data/resource
+POST ✔️       | Perform resource-specific processing on the request content
+PUT ❌        | Replace an existing resource or create a new resource at a specific URL
+DELETE ✔️     | Remove the specified resource
+HEAD ❌       | Same as GET, but returns only headers without the body
+OPTIONS ❌    | Describe the communication options for the target resource
+PATCH ❌      | Apply partial modifications to a resource
 
 ---
 ## Usage
