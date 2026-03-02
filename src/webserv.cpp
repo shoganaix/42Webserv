@@ -3,10 +3,10 @@
 /*                                                        :::      ::::::::   */
 /*   webserv.cpp                                        :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: angnavar <angnavar@student.42madrid.com    +#+  +:+       +#+        */
+/*   By: root <root@student.42.fr>                  +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/01/08 18:51:13 by angnavar          #+#    #+#             */
-/*   Updated: 2026/03/01 12:03:35 by angnavar         ###   ########.fr       */
+/*   Updated: 2026/03/02 19:30:14 by root             ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -37,7 +37,6 @@
 * - Loads and parses using ConfigParser
 * - Normalizes + validates
 * - Stores the resulting configurations internally for later use 
-* - ... 
 */
 Webserv::Webserv(const std::string &configFile)
 {
@@ -52,10 +51,11 @@ Webserv::Webserv(const std::string &configFile)
 }
 
 /*
-* - 📌TO DO:📌 [REVISAR]
-* - Create listening sockets based on server blocks
-* - Add listening sockets to poll()
-* - Store mapping
+* -📌DONE:📌 
+* - Creates listening sockets based on server blocks
+* - Adds listening sockets to poll()
+* - Stores mapping
+* 📌TO DO:📌
 * - ....
 */
 void Webserv::setSockets()
@@ -155,15 +155,11 @@ void Webserv::acceptNewConnection(int listeningFd)
     ev.events = EPOLLIN;
     ev.data.fd = clientFd;
 
-    if (epoll_ctl(this->epollFd, EPOLL_CTL_ADD, clientFd, &ev) < 0) {
+    if (epoll_ctl(this->epollFd, EPOLL_CTL_ADD, clientFd, `^&ev) < 0) {
         std::cerr << "Error añadiendo cliente a epoll" << std::endl;
         close(clientFd);
         return;
     }
-
-    // 4. (Opcional pero recomendado) Guardar que este cliente pertenece a X configuración
-    // Esto es útil para saber qué límites de 'client_max_body_size' aplicarle luego.
-    //this->clientToConfig[clientFd] = this->fdToConfig[listeningFd];
 
     std::cout << YELLOW << "New connection accepted on FD " << clientFd << RESET << std::endl;
 }
@@ -173,13 +169,13 @@ void Webserv::handleClient(int fd)
 }
 
 /*
-* Main event loop using poll():
+* -----------------------------MAIN EVENT LOOP USING EPOLL-----------------------------
 * - Accept clients from listening sockets
 * - Read from client sockets, accumulate data until a full HTTP request is available
 * - Once request is parsed, build response via routing pipeline (below)
 * - ...
 *
-* - 📌TO DO:📌 [REVISAR] 
+* - 📌DONE:📌
 * 	- poll(fds, ...)
 *	- handle events:
 *		   1) listening fd -> accept() new client -> add client fd to poll
@@ -187,6 +183,8 @@ void Webserv::handleClient(int fd)
 *		      -> when request complete: run routing pipeline (calls matchLocation + resolvePath)
 *		   3) client fd POLLOUT -> send pending response bytes
 *		   4) CGI pipe fds -> progress CGI sessions (read/write) + finalize response
+* 📌TO DO:📌
+* - ...
 */
 void Webserv::run()
 {
