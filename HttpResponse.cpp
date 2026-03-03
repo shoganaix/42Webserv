@@ -6,7 +6,7 @@
 /*   By: kpineda- <kpineda-@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/02/20 13:48:49 by kpineda-          #+#    #+#             */
-/*   Updated: 2026/03/02 22:33:56 by kpineda-         ###   ########.fr       */
+/*   Updated: 2026/03/03 17:44:36 by kpineda-         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -179,6 +179,36 @@ void HttpResponse::loadFile(const std::string& path)
 			setBody("<html><body><h1>403 Forbidden</h1><p>You don't have permission to access this resource.</p></body></html>");
 			addHeader("Content-Type", "text/html");
 		}
+	}
+}
+
+void HttpResponse::handleDelete(const std::string& fullPath)
+{
+	struct stat s;
+
+	if (stat(fullPath.c_str(), &s) != 0)
+	{
+		setStatusCode(404);
+		setBody("<html><body><h1>404 Not Found</h1><p>El archivo no existe.</p></body></html>");
+		return;
+	}
+
+	if (S_ISDIR(s.st_mode))
+	{
+		setStatusCode(403);
+		setBody("<html><body><h1>403 Forbidden</h1><p>No se pueden borrar directorios.</p></body></html>");
+		return;
+	}
+	
+	if (unlink(fullPath.c_str()) == 0)
+	{
+		setStatusCode(200);
+		setBody("<html><body><h1>File Deleted</h1><p>El recurso ha sido eliminado.</p></body></html>");
+	}
+	else
+	{
+		setStatusCode(500);
+		setBody("<html><body><h1>500 Internal Server Error</h1><p>No se pudo borrar el archivo.</p></body></html>");
 	}
 }
 

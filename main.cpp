@@ -6,7 +6,7 @@
 /*   By: kpineda- <kpineda-@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/02/20 19:24:44 by kpineda-          #+#    #+#             */
-/*   Updated: 2026/03/02 22:26:59 by kpineda-         ###   ########.fr       */
+/*   Updated: 2026/03/03 17:48:44 by kpineda-         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -77,5 +77,17 @@ int main() {
     HttpResponse resDir1;
     resDir1.loadFile("fotos"); 
     std::cout << resDir1.toString() << std::endl; 
+
+	std::cout << "--- PRUEBA 10: Borrar archivo existente ---" << std::endl;
+	HttpResponse resDelete;
+	// Simulamos que el usuario quiere borrar el archivo que creamos antes
+	resDelete.handleDelete("objeto_a_eliminar.txt"); 
+	std::cout << resDelete.toString() << std::endl;
+
+	std::cout << "\n--- PRUEBA 11: Borrar archivo que NO existe ---" << std::endl;
+	resDelete.clear();
+	resDelete.handleDelete("archivo_fantasma.txt");
+	std::cout << resDelete.toString() << std::endl;
+
     return 0;
 }

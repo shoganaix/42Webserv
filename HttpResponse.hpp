@@ -6,7 +6,7 @@
 /*   By: kpineda- <kpineda-@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/02/20 13:48:43 by kpineda-          #+#    #+#             */
-/*   Updated: 2026/03/02 22:05:29 by kpineda-         ###   ########.fr       */
+/*   Updated: 2026/03/03 17:37:56 by kpineda-         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -15,10 +15,11 @@
 
 # include <sys/stat.h>
 # include <unistd.h>
+# include <dirent.h>
 # include <sstream>
 # include <fstream>
 # include <string>
-# include <dirent.h>
+# include <cstdio>
 # include <map>
 
 class HttpResponse
@@ -54,6 +55,8 @@ public:
 
 	// Generate AutoIndex
 	std::string generateAutoIndex(const std::string& path);
+
+	void handleDelete(const std::string& fullpath);
 
 	//method to convert response to string format
 	std::string toString() const;
