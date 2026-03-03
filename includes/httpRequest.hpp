@@ -3,10 +3,10 @@
 /*                                                        :::      ::::::::   */
 /*   httpRequest.hpp                                    :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: kpineda- <kpineda-@student.42madrid.com    +#+  +:+       +#+        */
+/*   By: root <root@student.42.fr>                  +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/02/20 13:48:43 by kpineda-          #+#    #+#             */
-/*   Updated: 2026/03/14 19:24:18 by kpineda-         ###   ########.fr       */
+/*   Updated: 2026/03/03 21:57:18 by root             ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -23,13 +23,20 @@ class HttpRequest
 		std::string body;
 		std::map<std::string, std::string> headers;
 		std::string version;
-		std::string query;
-
+		std::string query; // Query extracted from URL(search?q=cat&page=2)
+		
 		bool headersFinished; // ¿Ya encontramos el \r\n\r\n?
         bool bodyFinished;    // ¿Ya leímos todo el Content-Length?
         size_t contentLength; // Para saber cuántos bytes de cuerpo faltan
 
-    HttpRequest() : headersFinished(false), bodyFinished(false), contentLength(0) {};
+    	HttpRequest() : headersFinished(false), bodyFinished(false), contentLength(0) {};
+		~HttpRequest() {};
+		
+		bool parse(const std::string& rawRequest);
+
+	private:
+		void HttpRequest::parseRequestLine(const std::string& line);
+		void HttpRequest::parseHeaderLine(const std::string& line);
 };
 
 #endif 
