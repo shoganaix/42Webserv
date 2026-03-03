@@ -6,7 +6,7 @@
 /*   By: kpineda- <kpineda-@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/02/20 19:24:44 by kpineda-          #+#    #+#             */
-/*   Updated: 2026/03/03 17:48:44 by kpineda-         ###   ########.fr       */
+/*   Updated: 2026/03/03 17:52:12 by kpineda-         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -80,7 +80,6 @@ int main() {
 
 	std::cout << "--- PRUEBA 10: Borrar archivo existente ---" << std::endl;
 	HttpResponse resDelete;
-	// Simulamos que el usuario quiere borrar el archivo que creamos antes
 	resDelete.handleDelete("objeto_a_eliminar.txt"); 
 	std::cout << resDelete.toString() << std::endl;
 
