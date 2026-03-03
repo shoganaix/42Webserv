@@ -3,10 +3,10 @@
 /*                                                        :::      ::::::::   */
 /*   webserv.cpp                                        :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: usuario <usuario@student.42.fr>            +#+  +:+       +#+        */
+/*   By: kpineda- <kpineda-@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/01/08 18:51:13 by angnavar          #+#    #+#             */
-/*   Updated: 2026/03/09 01:39:05 by usuario          ###   ########.fr       */
+/*   Updated: 2026/03/14 19:51:13 by kpineda-         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -15,14 +15,14 @@
  * ----------------------------TO DO:---------------------------------
  * HTTP parsing	❌
  * Routing	❌
- * Static files	✅
- * Autoindex	✅ -> Si la URI apunta a un directorio y no hay index,
+ * Static files	❌
+ * Autoindex	❌ -> Si la URI apunta a un directorio y no hay index,
  *                    entonces el servidor puede generar una página HTML 
  *                     con el listado de archivos del directorio
- * Error pages	✅
+ * Error pages	❌
  * Upload	❌
  * Chunked	❌     ->  Codifies body request HTTP
- * Non blocking IO correcto	✅
+ * Non blocking IO correcto	❌
 */
 
 /*-----------------------------------------------------------------------
@@ -270,9 +270,6 @@ void Webserv::handleClientData(int fd)
         return;
     }
 
-	// 0.client read buffer ??
-	
-    std::string rawRequest(buffer, bytes);
     // 1. Parses request [⚠️HTTPREQUEST.CPP]
 		//HttpRequest req = parseRequest(rawRequest);
 		   // parses request line, headers and body
@@ -283,27 +280,40 @@ void Webserv::handleClientData(int fd)
 		//Router router(this->servers);
 		//HttpResponse res = router.route(req);
 
-	// 3. Serializes the generated response (obj to HTTP)
-		//std::string rawResponse = res.toString();
+	// 3. Serializes the generated response
+		//std::string rawResponse = res.serialize();
 	
  	// 4. Stores it in the client write buffer
 	ClientState &client = this->clients[fd];
-	std::string response = 
-    "HTTP/1.1 200 OK\r\n"
-    "Content-Type: text/plain\r\n"
-    "Content-Length: 13\r\n"
-    "Connection: close\r\n"
-    "\r\n" // Línea vacía obligatoria que separa headers de body
-    "Hello Webserv";
-	client.writeBuffer = response;
+	client.readBuffer.append(buffer, bytes);
+	if (HttpParser::parseRequest(client.readBuffer, client.request))
+    {
+        // SI ENTRA AQUÍ, es que parseRequest devolvió 'true' (Petición completa)
+        
+        // 2. Aquí iría el Routing (Rol 4)
+        // Router router(this->servers);
+        // HttpResponse res = router.route(client.request);
 
-	// --- CAMBIO A MODO ESCRITURA ---
-    // Le decimos a epoll que ahora queremos saber cuando el socket esté listo para enviar (OUT)
-    epoll_event ev;
-    std::memset(&ev, 0, sizeof(ev));
-    ev.events = EPOLLIN | EPOLLOUT; // Escuchamos ambos por seguridad
-    ev.data.fd = fd;
-    epoll_ctl(this->epollFd, EPOLL_CTL_MOD, fd, &ev);
+        // 3. De momento, respuesta de prueba
+        std::string response = 
+            "HTTP/1.1 200 OK\r\n"
+            "Content-Type: text/plain\r\n"
+            "Content-Length: 13\r\n"
+            "Connection: close\r\n"
+            "\r\n"
+            "Hello Webserv";
+        client.writeBuffer = response;
+
+        // 4. CAMBIO A MODO ESCRITURA (EPOLLOUT)
+        epoll_event ev;
+        std::memset(&ev, 0, sizeof(ev));
+        ev.events = EPOLLOUT; 
+        ev.data.fd = fd;
+        epoll_ctl(this->epollFd, EPOLL_CTL_MOD, fd, &ev);
+        
+        // Limpiamos el buffer de lectura para que esté listo para la siguiente petición
+        client.readBuffer.clear();
+    }
 }
 
 void Webserv::handleClientWrite(int fd)

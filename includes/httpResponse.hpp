@@ -6,7 +6,7 @@
 /*   By: kpineda- <kpineda-@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/02/20 13:48:43 by kpineda-          #+#    #+#             */
-/*   Updated: 2026/03/08 12:20:09 by kpineda-         ###   ########.fr       */
+/*   Updated: 2026/03/14 19:58:19 by kpineda-         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -21,6 +21,7 @@
 # include <fstream>
 # include <string>
 # include <cstdio>
+# include <ctime>
 # include <map>
 
 class HttpResponse
@@ -53,15 +54,18 @@ public:
 
 	// File loading method
 	void loadFile(const std::string& path);
-
 	// Generate AutoIndex
 	std::string generateAutoIndex(const std::string& path);
+	void handleGet(const std::string& url, const Location& loc);
 
-	void handleDelete(const std::string& fullpath);
+	// DELETE handling method
+	void handleDelete(const std::string& url, const Location& loc);
 	
-	
+	// POST handling method
 	bool savePostFile(const std::string& uploadPath, const std::string& body, const std::string& filename);
 	void handlePost(const std::string& body, const Location& loc, size_t maxSize);
+
+	void setRedirect(const std::string& location, int code);
 
 	//method to convert response to string format
 	std::string toString() const;

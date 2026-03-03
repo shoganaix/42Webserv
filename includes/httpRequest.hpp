@@ -6,7 +6,11 @@
 /*   By: root <root@student.42.fr>                  +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/02/20 13:48:43 by kpineda-          #+#    #+#             */
+<<<<<<< HEAD
 /*   Updated: 2026/03/03 21:57:18 by root             ###   ########.fr       */
+=======
+/*   Updated: 2026/03/14 19:49:40 by kpineda-         ###   ########.fr       */
+>>>>>>> origin/main
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -14,6 +18,7 @@
 # define HTTPREQUEST_HPP
 
 # include "webserv.hpp"
+# include <map>
 
 class HttpRequest
 {
