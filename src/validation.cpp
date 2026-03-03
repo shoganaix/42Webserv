@@ -3,10 +3,10 @@
 /*                                                        :::      ::::::::   */
 /*   validation.cpp                                     :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: usuario <usuario@student.42.fr>            +#+  +:+       +#+        */
+/*   By: root <root@student.42.fr>                  +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/02/11 21:35:50 by usuario           #+#    #+#             */
-/*   Updated: 2026/03/08 23:58:25 by usuario          ###   ########.fr       */
+/*   Updated: 2026/03/03 21:05:32 by root             ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -35,9 +35,9 @@
 // *ADD METHODS* (GET, POST and DELETE mandatory)
 static bool isValidMethod(const std::string& m)
 {
-    //return (m == "GET" || m == "POST" || m == "DELETE");
-    return (m == "GET" || m == "POST" || m == "PUT" || m == "DELETE" ||
-             m == "HEAD" || m == "OPTIONS" || m == "PATCH");  
+    return (m == "GET" || m == "POST" || m == "DELETE");
+    /*return (m == "GET" || m == "POST" || m == "PUT" || m == "DELETE" ||
+             m == "HEAD" || m == "OPTIONS" || m == "PATCH");  */
 }
 
 static bool isValidHttpErrorCode(int code)
@@ -142,3 +142,63 @@ void validateAllServers(const std::vector<Config>& cfgs)
     for (size_t i = 0; i < cfgs.size(); ++i)
         validateServer(cfgs[i]);
 }
+
+/*
+ * - Validates whether a method of request is allowed for the matched-location block defined in conf
+ * - Compares the request method with the list in location struct (allow_methods)
+ * - If no methods are defined in location    -> returns true
+ * - If the method is permitted               -> returns true
+ * - If the method is not allowed             -> returns false
+ *                                              (server should respond with "405. Method Not Allowed")
+
+bool isMethodAllowed(const HttpRequest& req, const Location& loc)
+{
+    if (loc.allow_methods.empty())
+        return (true);
+
+    for (size_t i = 0; i < loc.allow_methods.size(); i++)
+    {
+        if (loc.allow_methods[i] == req.method)
+            return (true);
+    }
+    return (false);
+}
+ */
+
+/*
+ * - Validates that the size of the HTTP request body does not exceed
+ *   (client_max_body_size)
+ * 
+ * - If no limit is defined (value = zero)     -> returns true
+ * - If request body size is within the limit  -> returns true
+ * - If the body exceeds the maximum size      -> returns false
+ *                                              (server should respond with "413. Payload Too Large")
+
+bool isBodySizeValid(const HttpRequest& req, const Location& loc, const Config& cfg)
+{
+    size_t limit = cfg.client_max_body_size;
+
+    if (limit == 0)
+        return (true);
+
+    if (req.body.size() > limit)
+        return (false);
+
+    return (true);
+}
+ */
+/*
+ * - Validates request allowed METHODS & SIZE
+ * - Respond with error code 413 or 405 when needed
+ */
+/*
+int validateRequest(const HttpRequest& req, const Location& loc, const Config& cfg)
+{
+       if (!isMethodAllowed(req, loc))
+        return (405);
+
+    if (!isBodySizeValid(req, loc, cfg))
+        return (413);
+
+    return (0); 
+}*/
