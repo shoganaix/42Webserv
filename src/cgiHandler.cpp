@@ -3,150 +3,336 @@
 /*                                                        :::      ::::::::   */
 /*   cgiHandler.cpp                                     :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: root <root@student.42.fr>                  +#+  +:+       +#+        */
+/*   By: usuario <usuario@student.42.fr>            +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/03/02 18:05:15 by root              #+#    #+#             */
-/*   Updated: 2026/03/02 21:47:50 by root             ###   ########.fr       */
+/*   Updated: 2026/03/07 00:11:56 by usuario          ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
+
+#include "../includes/cgiHandler.hpp"
+#include "../includes/utils.hpp"
 
 /*-----------------------------------------------------------------------
  *                          🧩CGI HANDLER🧩
  *
- *  - Detects if a request must be handled as CGI ❌
- *      -> Checks file extension against configured cgi_ext
+ * This file implements the CGI execution pipeline of the webserver
+ * 
+ *  - Detects whether a requested resource must be executed as CGI
+ *  - Identifies the correct CGI handler based on file extension
+ *  - Builds the argv list and CGI env variables
+ *  - Executes the CGI process using fork(), pipe(), dup2(), and execve()
+ *  - Sends request body data to the CGI standard input (inPipe-stdin)
+ *  - Reads the CGI raw output from standard output (outPipe-stdout)
+ *  - Parses that result (CGI headers and body) into an HttpResponse object
  *
- *  - Prepares CGI execution environment ✅
- *      -> Builds environment variables (REQUEST_METHOD, QUERY_STRING, etc.)
- *      -> Prepares arguments for execve()
- *
- *  - Handles process creation ✅
- *      -> Creates pipes for IPC (stdin/stdout redirection)
- *      -> Calls fork()
- *      -> Executes interpreter with execve()
- *
- *  - Manages input/output flow ✅
- *      -> Sends POST body to CGI via stdin
- *      -> Captures CGI stdout output
- *
- *  - Parses CGI output ❌
- *      -> Extracts headers (Content-Type, etc.)
- *      -> Separates headers from body
- *
- *  - Builds final HTTP response ❌
- *      -> Adds HTTP status line (200 OK, 500, etc.)
- *      -> Appends CGI headers
- *      -> Appends response body
- *
- *  - Handles error cases ❌
- *      -> fork() failure
- *      -> execve() failure
- *      -> Timeout handling (if implemented)
- *      -> Non-zero exit status
- *
- *  This file transforms external scripts into dynamic
- *  HTTP responses compatible with the webserver engine.
+ * The goal of this module is to transform a CGI script execution
+ * into a valid HTTP response that can be returned by the server
  *-----------------------------------------------------------------------
  */
-
-#include "../includes/cgiHandler.hpp"
+//---------------------------------------DETECTING-------------------------------------------
 
 /*
- * 1. Creates two pipes
- *     inPipe-> [STDIN] sends request body to CGI script
- *     outPipe-> [STDOUT] reads CGI script output
- * 
- * 2. In CHILD process:
- *     Redirect pipes
- *     Prepare argv (interpreter, script path & NULL!) -> /usr/bin/python3 ./cgi-bin/test.py
- *     Set CGI environment variables:
- *        • REQUEST_METHOD
- *        • CONTENT_LENGTH
- *        • CONTENT_TYPE
- *     Execute CGI script
- * 
- * 3. In PARENT process:
- *     If method is POST-> writes request body into inPipe
- *     Close writing end to signal EOF to CGI
- *     Read CGI output (4096 bytes) from outPipe
- *       - Returns X → number of read bytes
- *       - Returns 0 → EOF
- *       - Returns -1 → error
- *     Appends bytes read to output string
- *     Wait for child process
- *
- * 4. Returns this CGI output as a string (NOT PARSED, RAW OUTPUT)
- * 
- *----------------------------------------------REMINDERS------------------------------------------- 
- * ---- ⚠️int execve(const char *pathname, char *const argv[], char *const envp[]) uses ARGV & ENVP TOO!!
- * ---- ⚠️4096 bytes = 4 KB ->  UNIX STANDARD
- * ---- ⚠️CGI TRANSFORMS HTTP RESQUEST INTO ENV VARIABLES -> REQUEST_METHOD, QUERY_STRING, CONTENT_LENGTH, CONTENT_TYPE, SCRIPT_NAME, PATH_INFO, SERVER_PROTOCOL & GATEWAY_INTERFACE
- * ------>We USE ONLY 3 of this variables defined in the 👉 Common Gateway Interface (CGI 1.1)👈
- * --------1️⃣ Request Method (GET, POST, DELETE)
- *              import os
- *              method = os.environ["REQUEST_METHOD"]
- * --------2️⃣ Content Lenght(NEEDED BY POST)
- *              import os, sys
- *              length = int(os.environ["CONTENT_LENGTH"])
- *              body = sys.stdin.read(length)
- * --------3️⃣ Content Type(So it can later treat & parse body) -> application/jso
- *              ctype = os.environ["CONTENT_TYPE"]
- * --------
- */ 
-std::string CgiHandler::execute(const std::string& interpreter, const std::string& scriptPath, const std::string& method, const std::string& body)
+ * Checks whether the requested filesystem path matches configured CGI extension
+ * If a match is found:
+ *   -> Builds & returns a CgiTarget containing handler path, script path, extension &
+ *       working directory for later execution
+ *   -> Otherwise, returns a default non-CGI target
+ */
+CgiTarget CgiHandler::detectCgi(const Location& loc, const std::string& fsPath)
 {
-    int inPipe[2];
-    int outPipe[2];
+	CgiTarget target;
+	size_t dot = fsPath.find_last_of('.');
 
-    if (pipe(inPipe) < 0 || pipe(outPipe) < 0)
-        return(throw (std::runtime_error("Error: Pipe failed\n")));
+	if (dot == std::string::npos)
+		return (target);
+        
+	std::string ext = fsPath.substr(dot);
+	std::map<std::string, std::string>::const_iterator it = loc.cgi_needs.find(ext);
 
-    pid_t pid = fork();
-    if (pid < 0)
-        return(throw (std::runtime_error("Error: Fork failed\n")));
+	if (it == loc.cgi_needs.end())
+		return (target);
 
-    // ---------------- CHILD ----------------
-    if (pid == 0)
-    {
-        dup2(inPipe[0], STDIN_FILENO);
-        dup2(outPipe[1], STDOUT_FILENO);
+	target.isCgi = true;
+	target.extension = ext;
+	target.handlerPath = it->second;
+	target.scriptPath = fsPath;
+	target.workingDir = dirnameOf(fsPath);
+	return (target);
+}
 
-        close(inPipe[1]);
-        close(outPipe[0]);
+//---------------------------------------BUILD + EXECUTE-------------------------------------------
 
-        char* argv[3];
-        argv[0] = const_cast<char*>(interpreter.c_str());
-        argv[1] = const_cast<char*>(scriptPath.c_str());
-        argv[2] = NULL;
-        std::stringstream cl;
-        cl << body.size();
+/*
+ * Builds the argv array used by execve()
+ *
+ * - The first argument is ALWAYS the handler executable
+ * - Some CGI handlers, such as Python, also require the script path
+ *      as an additional argument [BONUS: multiple CGI]
+ */
+std::vector<std::string> CgiHandler::buildArgv(const CgiTarget& target)
+{
+	std::vector<std::string> argv;
+	argv.push_back(target.handlerPath);
+	// Python normally asks script to be argv[1]
+	if (target.handlerPath.find("python") != std::string::npos)
+		argv.push_back(target.scriptPath);
+	// Php-cgi just needs SCRIPT_FILENAME defined in env
+	return (argv);
+}
 
-        char* envp[4];
-        envp[0] = const_cast<char*>(("REQUEST_METHOD=" + method).c_str());
-        envp[1] = const_cast<char*>(("CONTENT_LENGTH=" + cl.str()).c_str());
-        envp[2] = const_cast<char*>(("CONTENT_TYPE=application/x-www-form-urlencoded").c_str());
-        envp[3] = NULL;
+/*
+ * Builds CGI env map from HTTP REQUEST and the resolved CGI target (...)
+ *
+ * - Define standard CGI variables (REQUEST_METHOD, ..., SERVER_PORT) &
+ *      body-related metadata (CONTENT_TYPE, CONTENT_LENGTH)
+ * - Copies info needed by the script to understand request and its body 
+ * - HTTP headers are converted to CGI format with toUpperHeaderName (HTTP_*) 
+ * - Returns env map
+ */
+std::map<std::string, std::string> CgiHandler::buildEnv(const HttpRequest& req, const CgiTarget& target, const std::string& serverName, int serverPort, const std::string& clientIp)
+{
+	std::map<std::string, std::string> env;
+	env["GATEWAY_INTERFACE"] = "CGI/1.1";
+	env["SERVER_PROTOCOL"] = req.version.empty() ? "HTTP/1.1" : req.version;
+	env["REQUEST_METHOD"] = req.method;
+	env["QUERY_STRING"] = req.query;
+	env["SCRIPT_FILENAME"] = target.scriptPath;
+	env["SCRIPT_NAME"] = req.path;
+	env["SERVER_NAME"] = serverName;
+	env["REMOTE_ADDR"] = clientIp;
+	env["REDIRECT_STATUS"] = "200";
+    env["SERVER_PORT"] = intToString(serverPort);
+	std::map<std::string, std::string>::const_iterator it;
+	it = req.headers.find("Content-Type");
 
-        execve(argv[0], argv, envp);
-        exit(1);
-    }
-    // ---------------- PARENT ----------------
-    close(inPipe[0]);
-    close(outPipe[1]);
+	if (it != req.headers.end())
+		env["CONTENT_TYPE"] = it->second;
+	else
+	{
+		it = req.headers.find("content-type");
+		if (it != req.headers.end())
+			env["CONTENT_TYPE"] = it->second;
+	}
+	if (!req.body.empty())
+        env["CONTENT_LENGTH"] = intToString(req.body.size());
+	for (it = req.headers.begin(); it != req.headers.end(); ++it)
+	{
+		if (it->first == "Content-Type" || it->first == "content-type" || it->first == "Content-Length" || it->first == "content-length")
+			continue;
+		env[toUpperHeaderName(it->first)] = it->second;
+	}
+	return (env);
+}
 
-    if (method == "POST" && !body.empty())
-        write(inPipe[1], body.c_str(), body.size());
+ /*
+ * Executes the CGI process and returns its raw output and exit status
+ *  1. Creates two pipes
+ *       inPipe-> [STDIN] sends request body to CGI script
+ *       outPipe-> [STDOUT] reads CGI script output
+ *  2. Forks 
+ *    - In CHILD process:
+ *          Redirect pipes
+ *          Switch to CGI working directory
+ *          Prepare argv (interpreter, script path & NULL!)
+ *          Calls buildArgv & buildEnv
+ *          In a loop, transforms format to 'KEY=VALUE' (adds '=' between strings)
+ *          Execute CGI script with execve()
 
-    close(inPipe[1]);
+ *   - In PARENT process:
+ *          Write request body to CGI stdin (inPipe), only IF PRESENT (inPipe)
+ *          Read CGI output from stdout (outPipe) into result.rawOutput
+ *          Wait for child process to terminate
+ *          Store child exit status in result.exitCode
+ *
+ *  3. Returns CgiResult (child exit code and complete raw CGI output) 
+ *      [ still needs to be parsed ] !!
+ */
+CgiResult CgiHandler::execute(const HttpRequest& req, const CgiTarget& target, const std::string& serverName, int serverPort, const std::string& clientIp)
+{
+	CgiResult result;
+	int inPipe[2];
+	int outPipe[2];
 
-    char buffer[4096];
-    std::string output;
-    ssize_t bytes;
+	if (!target.isCgi)
+		throw (std::runtime_error("CGIHandler::execute called with a non-CGI target"));
 
-    while ((bytes = read(outPipe[0], buffer, sizeof(buffer))) > 0)
-        output.append(buffer, bytes);
+	if (pipe(inPipe) == -1)
+		throw (std::runtime_error("pipe() failed for CGIHandler::execute stdin"));
+	if (pipe(outPipe) == -1)
+	{
+		safeClose(inPipe[0]);
+		safeClose(inPipe[1]);
+		throw (std::runtime_error("pipe() failed for CGIHandler::execute stdout"));
+	}
 
-    close(outPipe[0]);
-    waitpid(pid, NULL, 0);
-    return (output);
+	pid_t pid = fork();
+	if (pid < 0)
+	{
+		safeClose(inPipe[0]);
+		safeClose(inPipe[1]);
+		safeClose(outPipe[0]);
+		safeClose(outPipe[1]);
+		throw std::runtime_error("fork() in CGIHandler::execute failed");
+	}
+
+	if (pid == 0)
+	{
+		dup2(inPipe[0], STDIN_FILENO);
+		dup2(outPipe[1], STDOUT_FILENO);
+		safeClose(inPipe[0]);
+		safeClose(inPipe[1]);
+		safeClose(outPipe[0]);
+		safeClose(outPipe[1]);
+
+		if (chdir(target.workingDir.c_str()) != 0)
+			_exit(127);
+
+		std::vector<std::string> argvS = buildArgv(target);
+		std::vector<char*> argv = vecToCharPtr(argvS);
+		std::map<std::string, std::string> envMap = buildEnv(req, target, serverName, serverPort, clientIp);
+		std::vector<std::string> envS;
+
+		for (std::map<std::string, std::string>::iterator it = envMap.begin(); it != envMap.end(); ++it)
+			envS.push_back(it->first + "=" + it->second);
+
+		std::vector<char*> envp = vecToCharPtr(envS);
+		execve(argv[0], &argv[0], &envp[0]);
+		_exit(127);
+	}
+	safeClose(inPipe[0]);
+	safeClose(outPipe[1]);
+	if (!req.body.empty())
+	{
+		size_t written = 0;
+		while (written < req.body.size())
+		{
+			ssize_t n = write(inPipe[1], req.body.data() + written, req.body.size() - written);
+			if (n < 0)
+				break;
+			written += static_cast<size_t>(n);
+		}
+	}
+	safeClose(inPipe[1]);
+	char buffer[4096]; // 4096 -> 4 KB
+	while (true)
+	{
+		ssize_t n = read(outPipe[0], buffer, sizeof(buffer));
+		if (n > 0)
+			result.rawOutput.append(buffer, n);
+		else
+			break;
+	}
+	safeClose(outPipe[0]);
+	int status = 0;
+	waitpid(pid, &status, 0);
+	if (WIFEXITED(status))
+		result.exitCode = WEXITSTATUS(status);
+	else
+		result.exitCode = 500;
+	return (result);
+}
+
+//---------------------------------------PARSING OUTPUT-------------------------------------------
+
+/*
+ * Returns the directory of a filesystem path
+ *  - If the path does not contain directory separator "/" -> returns current directory "."
+ */
+std::string CgiHandler::dirnameOf(const std::string& path)
+{
+	size_t pos = path.find_last_of('/');
+	if (pos == std::string::npos)
+		return (".");
+	if (pos == 0)
+		return ("/");
+	return (path.substr(0, pos));
+}
+
+/*
+ * Converts HTTP header name into CGI env format
+ *
+ * Example:
+ *   "Content-Length" -> "HTTP_CONTENT_LENGTH"
+ *
+ *  - Hyphens ("-") are replaced with underscores ("_")
+ *  - Letters are converted to uppercase
+ */
+std::string CgiHandler::toUpperHeaderName(const std::string& key)
+{
+	std::string out = "HTTP_";
+	for (size_t i = 0; i < key.size(); ++i)
+	{
+		char c = key[i];
+		if (c == '-')
+			out += '_';
+		else
+			out += static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
+	}
+	return (out);
+}
+
+/*
+ * Parses the raw CGI output and converts it into an HttpResponse
+ *
+ * - Separates CGI headers from body using the standard "\r\n\r\n" delimiter
+ *     - If no header block is present -> the whole output is treated as a text/plain body
+ *     - If a "Status" header is present -> its value is used as the HTTP status code
+ * - Splits raw output into a header section and a body section
+ * - Reads each header:
+ *    - Removes trailing '\r' left by std::getline()
+ *    - Ignores malformed lines that dont contain ':'
+ *    - Extracts headers name and value
+ *     - If header is "Status"-> parse its numeric HTTP status code
+ *     - Otherwise -> copy the header into the HttpResponse object
+ * - Stores CGI body as the HTTP response body
+ * - If no Content-Type header was provided by CGI -> add "Content-Type: text/html" 
+ * - Returns parsed obj response
+ */
+HttpResponse CgiHandler::parseCgiOutput(const std::string& rawOutput)
+{
+	HttpResponse response;
+	size_t sep = rawOutput.find("\r\n\r\n");
+
+	if (sep == std::string::npos)
+	{
+		response.setStatusCode(200);
+		response.addHeader("Content-Type", "text/plain");
+		response.setBody(rawOutput);
+		return (response);
+	}
+
+	std::string headersPart = rawOutput.substr(0, sep);
+	std::string bodyPart = rawOutput.substr(sep + 4);
+	std::istringstream iss(headersPart);
+	std::string line;
+	int statusCode = 200;
+
+	while (std::getline(iss, line))
+	{
+		if (!line.empty() && line[line.size() - 1] == '\r')
+			line.erase(line.size() - 1);
+
+		size_t colon = line.find(':');
+		if (colon == std::string::npos)
+			continue;
+
+		std::string key = line.substr(0, colon);
+		std::string value = line.substr(colon + 1);
+
+		while (!value.empty() && (value[0] == ' ' || value[0] == '\t'))
+			value.erase(0, 1);
+		if (key == "Status")
+		{
+			std::istringstream codeStream(value);
+			codeStream >> statusCode;
+		}
+		else
+			response.addHeader(key, value);
+	}
+	response.setStatusCode(statusCode);
+	response.setBody(bodyPart);
+	if (response.toString().find("Content-Type:") == std::string::npos)
+		response.addHeader("Content-Type", "text/html");
+	return (response);
 }

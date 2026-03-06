@@ -18,6 +18,10 @@ SRC =  src/main.cpp \
 		src/validation.cpp \
 		src/matchLocation.cpp \
 		src/pathResolver.cpp \
+		# src/httpRequest.cpp \
+
+		src/httpResponse.cpp \
+		src/cgiHandler.cpp \
 		src/utils.cpp \
 		src/debug.cpp 
 

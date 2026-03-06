@@ -3,10 +3,10 @@
 /*                                                        :::      ::::::::   */
 /*   webserv.cpp                                        :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: root <root@student.42.fr>                  +#+  +:+       +#+        */
+/*   By: usuario <usuario@student.42.fr>            +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/01/08 18:51:13 by angnavar          #+#    #+#             */
-/*   Updated: 2026/03/02 19:30:14 by root             ###   ########.fr       */
+/*   Updated: 2026/03/06 23:48:48 by usuario          ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -17,10 +17,11 @@
  *
  * Responsibilities:
  *  - Load and store parsed configuration
- *  - Initialize listening sockets
- *  - Manage the main event loop
- *  - Handle client connections
- * 	- ...
+ *  - Initialize listening sockets for each server
+ *  - Manage the main event loop (epoll)
+ *  - Handle client connections 
+ * 	- Handle client requests
+ *  - Generate a response
  *
  * The run() method starts the infinite event loop
  * where the server waits for incoming connections
@@ -33,10 +34,10 @@
 #include "validation.hpp"
 
 /*
-* - Receives path to conf at startup
-* - Loads and parses using ConfigParser
-* - Normalizes + validates
-* - Stores the resulting configurations internally for later use 
+ * - Receives path to conf at startup
+ * - Loads and parses using ConfigParser
+ * - Normalizes + validates
+ * - Stores the resulting configurations internally for later use 
 */
 Webserv::Webserv(const std::string &configFile)
 {
@@ -51,13 +52,17 @@ Webserv::Webserv(const std::string &configFile)
 }
 
 /*
-* -📌DONE:📌 
-* - Creates listening sockets based on server blocks
-* - Adds listening sockets to poll()
-* - Stores mapping
-* 📌TO DO:📌
-* - ....
-*/
+ * Creates and initializes the listening sockets defined in config
+ * -📌DONE:📌 
+ * - Creates listening sockets based on server blocks
+ * - Configures socket OPTIONS (SO_REUSEADDR, non-blocking mode, ...) and PORT
+ * - Adds listening sockets to poll()
+ * - Stores mapping between fd and server configuration
+ * 
+ * 📌TO DO:📌
+ * - Improve error handling if necessary ?)
+ * - Support multiple servers with same port [OPTIONAL]
+ */
 void Webserv::setSockets()
 {
 	// for each Config in this->config:
@@ -126,6 +131,9 @@ void Webserv::setSockets()
 	}
 }
 
+/*
+ * Checks whether a fd corresponds to one of the server listening sockets
+ */
 bool Webserv::isListeningFd(int fd)
 {
     for (size_t i = 0; i < this->fds.size(); ++i)
@@ -136,86 +144,114 @@ bool Webserv::isListeningFd(int fd)
     return false;
 }
 
+/*
+ * - Accepts a new client connection from a listening socket
+ * - Sets the client socket to non-blocking mode & registers
+ *    it in epoll instance for further monitoring
+ */
 void Webserv::acceptNewConnection(int listeningFd)
 {
     struct sockaddr_in clientAddr;
     socklen_t clientLen = sizeof(clientAddr);
     
     int clientFd = accept(listeningFd, (struct sockaddr *)&clientAddr, &clientLen);
-    
-    if (clientFd < 0) {
+    if (clientFd < 0)
+	{
         std::cerr << "Error en accept: " << strerror(errno) << std::endl;
         return;
     }
 
-    
     fcntl(clientFd, F_SETFL, O_NONBLOCK);
     struct epoll_event ev;
     std::memset(&ev, 0, sizeof(ev));
     ev.events = EPOLLIN;
     ev.data.fd = clientFd;
 
-    if (epoll_ctl(this->epollFd, EPOLL_CTL_ADD, clientFd, `^&ev) < 0) {
+    if (epoll_ctl(this->epollFd, EPOLL_CTL_ADD, clientFd, &ev) < 0)
+	{
         std::cerr << "Error añadiendo cliente a epoll" << std::endl;
         close(clientFd);
         return;
     }
-
     std::cout << YELLOW << "New connection accepted on FD " << clientFd << RESET << std::endl;
 }
 
+/*
+ * Handles a client socket event:
+ *  - Reads the HTTP request
+ *  - Parses the request
+ *  - Routes it through the Router
+ *  - Sends the generated HTTP response
+ *  - Closes connection
+ * 
+ * HTTP Request
+ *		↓
+ *	Router / file resolution
+ *		↓
+ *	detectCgi()
+ *		↓
+ *	CgiTarget (describe cómo ejecutar el CGI)
+ *		↓
+ *	execute CGI
+ *		↓
+ *	CgiResult (guarda lo que devolvió el CGI)
+ *		↓
+ *	parseCgiOutput()
+ *		↓
+ *	HttpResponse
+ *
+ */
 void Webserv::handleClient(int fd)
 {
+	char buffer[8192]; // 8192 -> 8 KB
+    ssize_t bytes = recv(fd, buffer, sizeof(buffer), 0);
+
+    if (bytes <= 0)
+    {
+        close(fd);
+        return;
+    }
+
+    std::string rawRequest(buffer, bytes);
+    // 1. parsear request
+		//HttpRequest req = parseRequest(rawRequest);
+    // 2. rutear
+		//Router router(this->servers);
+		//HttpResponse res = router.route(req);
+
+    // 3. enviar respuesta
+		//std::string rawResponse = res.serialize();
+		//send(fd, rawResponse.c_str(), rawResponse.size(), 0);
+		//close(fd);
 }
 
 /*
-* -----------------------------MAIN EVENT LOOP USING EPOLL-----------------------------
-* - Accept clients from listening sockets
-* - Read from client sockets, accumulate data until a full HTTP request is available
-* - Once request is parsed, build response via routing pipeline (below)
-* - ...
-*
-* - 📌DONE:📌
-* 	- poll(fds, ...)
-*	- handle events:
-*		   1) listening fd -> accept() new client -> add client fd to poll
-*		   2) client fd POLLIN -> read request data -> parse HttpRequest
-*		      -> when request complete: run routing pipeline (calls matchLocation + resolvePath)
-*		   3) client fd POLLOUT -> send pending response bytes
-*		   4) CGI pipe fds -> progress CGI sessions (read/write) + finalize response
-* 📌TO DO:📌
-* - ...
-*/
+ * -----------------------------MAIN EVENT LOOP USING EPOLL-----------------------------
+ *  Starts the main server loop using epoll. 
+ * 
+ *  - Initializes all listening sockets
+ *  - Waits for I/O events on the epoll instance
+ *  - For each triggered fd:
+ *     -> If that fd is a listening socket, accepts new client connections on sockets
+ *     -> Otherwise, client request is processed
+ *  - Handles client activity on connected sockets
+ * 
+ *- 📌DONE:📌
+ * 	- poll(fds, ...)
+ *	- handle events:
+ *		   1) listening fd -> accept() new client -> add client fd to poll
+ *		   2) client fd POLLIN -> read request data -> parse HttpRequest
+ *		      -> when request complete: run routing pipeline (calls matchLocation + resolvePath)
+ *		   3) client fd POLLOUT -> send pending response bytes
+ *  - Send responses back to clients
+ * 
+ * - 📌TO DO:📌
+ *  - Support partial reads / request buffering
+ *  - Support POLLOUT for large responses
+ *  - Improve connection lifecycle handling
+ */
 void Webserv::run()
 {
-	// 🤖 AI BASE STRUCTURE FOR RUN FUNCTION 🤖 [REVISAR] ❗❗
-	// - 1. Select server config:
-	// 		* by listening socket (port) and optionally Host header
-	// - 2. Location match:
-	//      * const Location* loc = matchLocation(serverCfg, req.path);
-	// - 3. Apply location directives before filesystem:
-	//	    * if loc->redir -> return 3xx response
-	//	    * if method not allowed -> 405
-	// - 4. File resolution:
-	//      * ResolvedPath rp = resolvePath(*loc, req.path);
-	//        // rp.fsPath is the target path on disk
-	// - 5. Decide static vs autoindex vs CGI:
-	//      * stat(rp.fsPath) to detect file/dir
-	//      * if directory:
-	//	      - if autoindex on -> generate listing
-	//        - else -> append index and retry, or 403/404 depending on policy
-	//	    * CGI detection:
-	//	      CgiTarget cgi = detectCgi(*loc, rp.fsPath);
-	//	      if cgi.isCgi -> run CGI subsystem
-	// - 6. CGI execution (poll-integrated):
-	//     * Create CgiSession (fork/exec + pipes)
-	//     * Add CGI pipe fds to poll set
-	//     * POLLOUT: write request body to CGI stdin, then close (EOF)
-	//     * POLLIN: read CGI stdout until EOF / Content-Length satisfied
-	//     * Parse CGI headers/body and build final HttpResponse
-	// - 7. Send response:
-	//     * write() response to client socket (non-blocking)
-	//     * close or keep-alive depending on headers
 	setSockets();
 	
 	std::cout << GREEN << "Webserv running..." << RESET <<std::endl;
@@ -226,22 +262,18 @@ void Webserv::run()
 		int nfds = epoll_wait(this->epollFd, epoll_events, 100, -1);
 		if (nfds < 0) 
 		{
-			if (errno == EINTR) continue;
+			if (errno == EINTR)
+				continue;
 			throw std::runtime_error("epoll_wait error");
 		}
 
 		for (int i = 0; i < nfds; i++)
 		{
 			int fd = epoll_events[i].data.fd;
-			// Aquí es donde dividimos el trabajo:
-			
-			// PASO 2: Alguien nuevo quiere entrar
 			if (isListeningFd(fd))
 				acceptNewConnection(fd);
-			// PASO 3: Un cliente que ya aceptamos nos envió algo
 			else
 				handleClient(fd);
 		}
 	}
-
 }

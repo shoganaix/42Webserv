@@ -3,10 +3,10 @@
 /*                                                        :::      ::::::::   */
 /*   webserv.hpp                                        :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: root <root@student.42.fr>                  +#+  +:+       +#+        */
+/*   By: usuario <usuario@student.42.fr>            +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2025/12/10 20:21:23 by msoriano          #+#    #+#             */
-/*   Updated: 2026/03/02 21:56:04 by root             ###   ########.fr       */
+/*   Updated: 2026/03/06 23:07:00 by usuario          ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -18,30 +18,32 @@
 
 #include <iostream>      // std::cout, std::cerr
 #include <string>        // std::string
-#include <vector>        // std::vector (para tus Configs y pollfds)
-#include <map>           // std::map (para las Locations y Error Pages)
+#include <vector>        // std::vector (for Configs & pollfds)
+#include <map>           // std::map (for Locations & Error Pages)
 #include <algorithm>     // std::find, std::sort
-#include <fstream>       // std::ifstream (para leer archivos de config y el root)
-#include <sstream>       // std::stringstream (útil para parsear headers y números)
+#include <fstream>       // std::ifstream (reading files from config & root)
+#include <sstream>       // std::stringstream (parsing headers)
+#include <stdexcept>     // td::runtime_error, std::exception
 
 #include <unistd.h>      // close(), read(), write(), fork(), pipe()
-#include <fcntl.h>       // fcntl(), O_NONBLOCK, F_SETFL
-#include <sys/wait.h>    // waitpid() (necesario para limpiar procesos CGI)
-#include <sys/stat.h>    // stat() (para saber si un archivo existe o es un directorio)
-#include <signal.h>      // signal() (para ignorar SIGPIPE y que el server no muera)
+#include <fcntl.h>       // fcntl(), O_NONBLOCK, F_SETFL (flags and flag utilities)
+#include <sys/wait.h>    // waitpid()
+#include <sys/stat.h>    // stat() (retrieves file info; whether a path exists or directory)
+#include <signal.h>      // signal() (ignore SIGPIPE without server dying)
 
 #include <cstring>       // memset(), strerror()
 #include <cstdlib>       // atoi(), exit(), getenv()
-#include <cstdio>        // perror()
-#include <netdb.h>
-#include <dirent.h>
+#include <cstdio>        // perror() (prints system error message)
+#include <cctype>        // std::isdigit(), std::isspace()
+
+#include <netdb.h>       // getaddrinfo(), freeaddrinfo() (Translates hostnames and services info into socket address structures)
+#include <dirent.h>      // opendir(), readdir()
 
 #include <sys/socket.h>  // socket(), bind(), listen(), accept(), etc.
-#include <netinet/in.h>  // struct sockaddr_in
-#include <arpa/inet.h>   // inet_addr(), htons()
-#include <sys/types.h>   // Tipos de datos básicos para sockets
+#include <netinet/in.h>  // struct sockaddr_in (IPv4 socket address structure & utilities)
+#include <arpa/inet.h>   // inet_addr(), htons() (IP address conversion utilities)
+#include <sys/types.h>   // basic data types for sockets
 #include <sys/epoll.h>   // epoll_create1(), epoll_ctl(), epoll_wait()
-
 
 struct Location
 {
@@ -70,7 +72,7 @@ struct Config
 
     int port;
     int max_size;
-	long client_max_body_size;
+	size_t client_max_body_size;
     std::string host;
     std::string root;
     std::string index;
@@ -87,19 +89,15 @@ class Webserv
 	std::map<int, Config>	fdToConfig;
 
 public:
-
     Webserv(const std::string &configFile);
     ~Webserv() {};
-
     void run();
 
 private:
-
     void setSockets();
 	bool isListeningFd(int fd);
 	void acceptNewConnection(int fd);
-	void handleClient(int fd);
-    
+	void handleClient(int fd);  
 };
 
 #endif
