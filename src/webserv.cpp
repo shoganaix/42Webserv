@@ -6,9 +6,24 @@
 /*   By: usuario <usuario@student.42.fr>            +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/01/08 18:51:13 by angnavar          #+#    #+#             */
-/*   Updated: 2026/03/06 23:48:48 by usuario          ###   ########.fr       */
+/*   Updated: 2026/03/07 01:04:10 by usuario          ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
+
+
+/* BORRAR LUEGO:
+ * ----------------------------TO DO:---------------------------------
+ * HTTP parsing	❌
+ * Routing	❌
+ * Static files	❌
+ * Autoindex	❌ -> Si la URI apunta a un directorio y no hay index,
+ *                    entonces el servidor puede generar una página HTML 
+ *                     con el listado de archivos del directorio
+ * Error pages	❌
+ * Upload	❌
+ * Chunked	❌     ->  Codifies body request HTTP
+ * Non blocking IO correcto	❌
+*/
 
 /*-----------------------------------------------------------------------
  *                          🧠WEBSERV BRAIN🧠
@@ -60,7 +75,6 @@ Webserv::Webserv(const std::string &configFile)
  * - Stores mapping between fd and server configuration
  * 
  * 📌TO DO:📌
- * - Improve error handling if necessary ?)
  * - Support multiple servers with same port [OPTIONAL]
  */
 void Webserv::setSockets()
@@ -179,26 +193,60 @@ void Webserv::acceptNewConnection(int listeningFd)
 /*
  * Handles a client socket event:
  *  - Reads the HTTP request
- *  - Parses the request
- *  - Routes it through the Router
- *  - Sends the generated HTTP response
- *  - Closes connection
  * 
- * HTTP Request
+ *  📌TO DO:📌
+ *  - Parses the request
+ *  - Routes it through router.cpp (router decides how sever must respond to a request)
+ *    [ route.cpp ]
+ *    { 
+ *		- selects the server
+ *		- calls parsing location and path resolver
+ *		- checks allowed methods in loc.allow_methods
+ *		- checks client_max_body_size limits in loc.client_max_body_size
+ *		- handles configured redirections (return)
+ *      - calls detect cgi & CgiHandler if so
+ *      - detects if the request targets a directory
+ *            -> performs Autoindex or Index
+ *      - detects if request targets a regular file
+ *            -> calls staticFileHandler
+ *      - handles uploads
+ *            -> calls upload handler if needed
+ *      - handles HTTP errors
+ *            -> builds ErrorResponse (404, 403, 405, 413, 500, ...)
+ *      - returns a complete HttpResponse object
+ *    }
+ *  - Serializes the generated HTTP response
+ *  - Stores it in the client write buffer
+ *  - Sends response through non-blocking socket I/O
+ *  - Closes connection when the full response has been sent
+ * 
+ * ------------------------------ STRUCTURE ---------------------------
+ * 
+ * 	socket accepted
+ *      ↓
+ * 	read raw HTTP data
+ *      ↓
+ * 	HTTP parser
+ *      ↓
+ * 	HTTP Request
  *		↓
- *	Router / file resolution
+ * 	Router / file resolution
  *		↓
- *	detectCgi()
+ * 	detectCgi()
  *		↓
- *	CgiTarget (describe cómo ejecutar el CGI)
+ * 	CgiTarget (describes how a resource should be executed as CGI)
  *		↓
- *	execute CGI
+ * 	execute CGI
  *		↓
- *	CgiResult (guarda lo que devolvió el CGI)
+ * 	CgiResult (saves CGI execution result & exit status)
  *		↓
- *	parseCgiOutput()
+ * 	parseCgiOutput()
  *		↓
  *	HttpResponse
+ *		↓	
+ *	serialize response
+ *	    ↓
+ *	send to client
  *
  */
 void Webserv::handleClient(int fd)
@@ -213,16 +261,32 @@ void Webserv::handleClient(int fd)
     }
 
     std::string rawRequest(buffer, bytes);
-    // 1. parsear request
+    // 1. Parses request [⚠️HTTPREQUEST.CPP]
 		//HttpRequest req = parseRequest(rawRequest);
-    // 2. rutear
+		   // parses request line, headers and body
+		   // if Transfer-Encoding: chunked → rebuild body
+		   // separates query string from path
+
+    // 2. Routes it [⚠️ROUTER.CPP]
 		//Router router(this->servers);
 		//HttpResponse res = router.route(req);
 
-    // 3. enviar respuesta
+	// 3. Serializes the generated response
 		//std::string rawResponse = res.serialize();
+
+ 	// 4. Stores it in the client write buffer
+		// ClientState& client = clients[fd];                     
+		// client.writeBuffer = rawResponse;
+
+    // 5. Sends HTTP response through non-blocking socket I/O
 		//send(fd, rawResponse.c_str(), rawResponse.size(), 0);
-		//close(fd);
+
+	// 6. Closes connection
+		// if (client.writeBuffer.empty())
+		//{
+		//    cleanupClientConnection(fd);
+		//    close(fd);
+		//}
 }
 
 /*
@@ -244,11 +308,6 @@ void Webserv::handleClient(int fd)
  *		      -> when request complete: run routing pipeline (calls matchLocation + resolvePath)
  *		   3) client fd POLLOUT -> send pending response bytes
  *  - Send responses back to clients
- * 
- * - 📌TO DO:📌
- *  - Support partial reads / request buffering
- *  - Support POLLOUT for large responses
- *  - Improve connection lifecycle handling
  */
 void Webserv::run()
 {
