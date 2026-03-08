@@ -6,13 +6,14 @@
 /*   By: kpineda- <kpineda-@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/02/20 13:48:43 by kpineda-          #+#    #+#             */
-/*   Updated: 2026/03/08 11:23:41 by kpineda-         ###   ########.fr       */
+/*   Updated: 2026/03/08 12:04:45 by kpineda-         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
 #ifndef HTTPRESPONSE_HPP
 # define HTTPRESPONSE_HPP
 
+# include "webserv.hpp"
 # include <sys/stat.h>
 # include <unistd.h>
 # include <dirent.h>
@@ -60,7 +61,7 @@ public:
 	
 	
 	bool savePostFile(const std::string& uploadPath, const std::string& body, const std::string& filename);
-	void handlePost(const std::string& body, const LocationConfig& config);
+	void handlePost(const std::string& body, const Location& loc, size_t maxSize);
 
 	//method to convert response to string format
 	std::string toString() const;

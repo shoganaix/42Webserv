@@ -6,7 +6,7 @@
 /*   By: kpineda- <kpineda-@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/02/20 13:48:49 by kpineda-          #+#    #+#             */
-/*   Updated: 2026/03/08 11:20:47 by kpineda-         ###   ########.fr       */
+/*   Updated: 2026/03/08 12:11:15 by kpineda-         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -224,6 +224,54 @@ bool HttpResponse::savePostFile(const std::string& uploadPath, const std::string
 		return true;
 	}
 	return false;
+}
+
+void HttpResponse::handlePost(const std::string& body, const Location& loc, size_t maxSize)
+{
+	bool allowed = false;
+	for (size_t i = 0; i < loc.allow_methods.size(); ++i)
+	{
+		if (loc.allow_methods[i] == "POST")
+		{
+			allowed = true;
+			break;
+		}
+	}
+
+	if (!allowed)
+	{
+		setStatusCode(405);
+		setBody("<html><body><h1>405 Method Not Allowed</h1><p>POST method is not allowed for this resource.</p></body></html>");
+		addHeader("Content-Type", "text/html");
+		return;
+	}
+	
+	if (body.length() > maxSize)
+	{
+		setStatusCode(413);
+		setBody("<html><body><h1>413 Payload Too Large</h1><p>The uploaded data exceeds the maximum allowed size.</p></body></html>");
+		addHeader("Content-Type", "text/html");
+		return;
+	}
+
+	std::string path = loc.upload_path.empty() ? loc.root : loc.upload_path;
+	std::string fullPath = path + "/uploaded_file.txt";
+	
+	std::ofstream outFile(fullPath.c_str(), std::ios::out | std::ios::binary);
+	if (outFile.is_open())
+	{
+		outFile << body;
+		outFile.close();
+		setStatusCode(201);
+		setBody("<html><body><h1>201 Created</h1><p>File uploaded successfully.</p></body></html>");
+		addHeader("Content-Type", "text/html");
+	}
+	else
+	{
+		setStatusCode(500);
+		setBody("<html><body><h1>500 Internal Server Error</h1><p>Failed to save the uploaded file.</p></body></html>");
+		addHeader("Content-Type", "text/html");
+	}
 }
 
 std::string HttpResponse::toString() const
