@@ -6,7 +6,7 @@
 /*   By: kpineda- <kpineda-@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/02/20 13:48:49 by kpineda-          #+#    #+#             */
-/*   Updated: 2026/03/03 17:44:36 by kpineda-         ###   ########.fr       */
+/*   Updated: 2026/03/08 11:20:47 by kpineda-         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -210,6 +210,20 @@ void HttpResponse::handleDelete(const std::string& fullPath)
 		setStatusCode(500);
 		setBody("<html><body><h1>500 Internal Server Error</h1><p>No se pudo borrar el archivo.</p></body></html>");
 	}
+}
+
+bool HttpResponse::savePostFile(const std::string& uploadPath, const std::string& body, const std::string& filename)
+{
+	std::string fullPath = uploadPath + "/" + filename;
+	
+	std::ofstream file(fullPath.c_str(), std::ios::out | std::ios::binary);
+	if (file.is_open())
+	{
+		file << body;
+		file.close();
+		return true;
+	}
+	return false;
 }
 
 std::string HttpResponse::toString() const
