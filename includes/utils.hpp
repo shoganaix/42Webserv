@@ -3,10 +3,10 @@
 /*                                                        :::      ::::::::   */
 /*   utils.hpp                                          :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: usuario <usuario@student.42.fr>            +#+  +:+       +#+        */
+/*   By: kpineda- <kpineda-@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/01/21 00:49:35 by usuario           #+#    #+#             */
-/*   Updated: 2026/03/06 22:23:35 by usuario          ###   ########.fr       */
+/*   Updated: 2026/03/08 13:13:48 by kpineda-         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -16,7 +16,7 @@
 #include "webserv.hpp"
 
 std::string intToString(int n);
-static void safeClose(int fd);
-static std::vector<char*> vecToCharPtr(std::vector<std::string>& src);
+void safeClose(int fd);
+std::vector<char*> vecToCharPtr(std::vector<std::string>& src);
 
 #endif

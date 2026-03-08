@@ -3,10 +3,10 @@
 /*                                                        :::      ::::::::   */
 /*   validation.cpp                                     :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: msoriano <msoriano@student.42.fr>          +#+  +:+       +#+        */
+/*   By: kpineda- <kpineda-@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/02/11 21:35:50 by usuario           #+#    #+#             */
-/*   Updated: 2026/02/14 13:36:02 by msoriano         ###   ########.fr       */
+/*   Updated: 2026/03/08 13:10:11 by kpineda-         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -105,8 +105,8 @@ void validateServer(const Config& cfg)
         throw std::runtime_error("Invalid listen port: " + intToString(cfg.port) + " (must be 1..65535)");
     if (cfg.host.empty())
         throw std::runtime_error("Host is empty");
-    if (cfg.client_max_body_size < 0)
-        throw std::runtime_error("client_max_body_size is negative");
+    //if (cfg.client_max_body_size < 0)
+    //    throw std::runtime_error("client_max_body_size is negative");
     if (cfg.root.empty())
         throw std::runtime_error("Server root is empty");
     if (cfg.index.empty())

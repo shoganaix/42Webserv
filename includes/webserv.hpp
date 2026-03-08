@@ -6,7 +6,7 @@
 /*   By: kpineda- <kpineda-@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2025/12/10 20:21:23 by msoriano          #+#    #+#             */
-/*   Updated: 2026/03/08 12:51:59 by kpineda-         ###   ########.fr       */
+/*   Updated: 2026/03/08 13:05:02 by kpineda-         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -96,6 +96,8 @@ class Webserv
     std::vector<Config>		config;
 	std::map<int, Config>	fdToConfig; // Mapea socket_escucha -> Config
     std::map<int, ClientState> clients; // Centraliza los clientes
+
+public:
     Webserv(const std::string &configFile);
     ~Webserv() {};
     void run();

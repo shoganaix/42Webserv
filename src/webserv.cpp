@@ -6,7 +6,7 @@
 /*   By: kpineda- <kpineda-@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/01/08 18:51:13 by angnavar          #+#    #+#             */
-/*   Updated: 2026/03/08 12:51:49 by kpineda-         ###   ########.fr       */
+/*   Updated: 2026/03/08 13:55:12 by kpineda-         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -286,8 +286,14 @@ void Webserv::handleClientData(int fd)
 	
  	// 4. Stores it in the client write buffer
 	ClientState &client = this->clients[fd];
-	std::string dummyResponse = "HTTP/1.1 200 OK\r\nContent-Length: 13\r\n\r\nHello Webserv";
-	client.writeBuffer = dummyResponse;
+	std::string response = 
+    "HTTP/1.1 200 OK\r\n"
+    "Content-Type: text/plain\r\n"
+    "Content-Length: 13\r\n"
+    "Connection: close\r\n"
+    "\r\n" // Línea vacía obligatoria que separa headers de body
+    "Hello Webserv";
+	client.writeBuffer = response;
 
 	// --- CAMBIO A MODO ESCRITURA ---
     // Le decimos a epoll que ahora queremos saber cuando el socket esté listo para enviar (OUT)

@@ -3,10 +3,10 @@
 /*                                                        :::      ::::::::   */
 /*   utils.cpp                                          :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: usuario <usuario@student.42.fr>            +#+  +:+       +#+        */
+/*   By: kpineda- <kpineda-@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/01/21 00:44:52 by usuario           #+#    #+#             */
-/*   Updated: 2026/03/06 22:24:47 by usuario          ###   ########.fr       */
+/*   Updated: 2026/03/08 13:14:20 by kpineda-         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -33,13 +33,13 @@ std::string intToString(int n)
     return oss.str();
 }
 
-static void safeClose(int fd)
+void safeClose(int fd)
 {
 	if (fd >= 0)
 		close(fd);
 }
 
-static std::vector<char*> vecToCharPtr(std::vector<std::string>& src)
+std::vector<char*> vecToCharPtr(std::vector<std::string>& src)
 {
 	std::vector<char*> out;
 	for (size_t i = 0; i < src.size(); ++i)
