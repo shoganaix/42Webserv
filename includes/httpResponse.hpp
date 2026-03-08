@@ -3,10 +3,10 @@
 /*                                                        :::      ::::::::   */
 /*   httpResponse.hpp                                   :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: root <root@student.42.fr>                  +#+  +:+       +#+        */
+/*   By: kpineda- <kpineda-@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/02/20 13:48:43 by kpineda-          #+#    #+#             */
-/*   Updated: 2026/03/02 21:56:13 by root             ###   ########.fr       */
+/*   Updated: 2026/03/08 12:20:09 by kpineda-         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -14,6 +14,14 @@
 # define HTTPRESPONSE_HPP
 
 # include "webserv.hpp"
+# include <sys/stat.h>
+# include <unistd.h>
+# include <dirent.h>
+# include <sstream>
+# include <fstream>
+# include <string>
+# include <cstdio>
+# include <map>
 
 class HttpResponse
 {
@@ -48,6 +56,12 @@ public:
 
 	// Generate AutoIndex
 	std::string generateAutoIndex(const std::string& path);
+
+	void handleDelete(const std::string& fullpath);
+	
+	
+	bool savePostFile(const std::string& uploadPath, const std::string& body, const std::string& filename);
+	void handlePost(const std::string& body, const Location& loc, size_t maxSize);
 
 	//method to convert response to string format
 	std::string toString() const;

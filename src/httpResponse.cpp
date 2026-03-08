@@ -3,14 +3,14 @@
 /*                                                        :::      ::::::::   */
 /*   httpResponse.cpp                                   :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: root <root@student.42.fr>                  +#+  +:+       +#+        */
+/*   By: kpineda- <kpineda-@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/02/20 13:48:49 by kpineda-          #+#    #+#             */
-/*   Updated: 2026/03/02 21:54:30 by root             ###   ########.fr       */
+/*   Updated: 2026/03/08 12:21:38 by kpineda-         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
-#include "../includes/httpResponse.hpp"
+#include "httpResponse.hpp"
 
 // Static member definitions
 std::map<int, std::string> HttpResponse::statusMessages;
@@ -179,6 +179,98 @@ void HttpResponse::loadFile(const std::string& path)
 			setBody("<html><body><h1>403 Forbidden</h1><p>You don't have permission to access this resource.</p></body></html>");
 			addHeader("Content-Type", "text/html");
 		}
+	}
+}
+
+void HttpResponse::handleDelete(const std::string& fullPath)
+{
+	struct stat s;
+
+	if (stat(fullPath.c_str(), &s) != 0)
+	{
+		setStatusCode(404);
+		setBody("<html><body><h1>404 Not Found</h1><p>El archivo no existe.</p></body></html>");
+		return;
+	}
+
+	if (S_ISDIR(s.st_mode))
+	{
+		setStatusCode(403);
+		setBody("<html><body><h1>403 Forbidden</h1><p>No se pueden borrar directorios.</p></body></html>");
+		return;
+	}
+	
+	if (unlink(fullPath.c_str()) == 0)
+	{
+		setStatusCode(200);
+		setBody("<html><body><h1>File Deleted</h1><p>El recurso ha sido eliminado.</p></body></html>");
+	}
+	else
+	{
+		setStatusCode(500);
+		setBody("<html><body><h1>500 Internal Server Error</h1><p>No se pudo borrar el archivo.</p></body></html>");
+	}
+}
+
+bool HttpResponse::savePostFile(const std::string& uploadPath, const std::string& body, const std::string& filename)
+{
+	std::string fullPath = uploadPath + "/" + filename;
+	
+	std::ofstream file(fullPath.c_str(), std::ios::out | std::ios::binary);
+	if (file.is_open())
+	{
+		file << body;
+		file.close();
+		return true;
+	}
+	return false;
+}
+
+void HttpResponse::handlePost(const std::string& body, const Location& loc, size_t maxSize)
+{
+	bool allowed = false;
+	for (size_t i = 0; i < loc.allow_methods.size(); ++i)
+	{
+		if (loc.allow_methods[i] == "POST")
+		{
+			allowed = true;
+			break;
+		}
+	}
+
+	if (!allowed)
+	{
+		setStatusCode(405);
+		setBody("<html><body><h1>405 Method Not Allowed</h1><p>POST method is not allowed for this resource.</p></body></html>");
+		addHeader("Content-Type", "text/html");
+		return;
+	}
+	
+	if (body.length() > maxSize)
+	{
+		setStatusCode(413);
+		setBody("<html><body><h1>413 Payload Too Large</h1><p>The uploaded data exceeds the maximum allowed size.</p></body></html>");
+		addHeader("Content-Type", "text/html");
+		return;
+	}
+
+	std::string path = loc.upload_path.empty() ? loc.root : loc.upload_path;
+	std::string fullPath = path + "/uploaded_file.txt";
+	
+	std::ofstream outFile(fullPath.c_str(), std::ios::out | std::ios::binary);
+	if (outFile.is_open())
+	{
+		outFile << body;
+		outFile.close();
+		setStatusCode(201);
+		setBody("<html><body><h1>201 Created</h1><p>File uploaded successfully.</p></body></html>");
+		addHeader("Content-Type", "text/html");
+	}
+	else
+	{
+		setStatusCode(500);
+		setBody("<html><body><h1>500 Internal Server Error</h1><p>Failed to save the uploaded file.</p></body></html>");
+		addHeader("Content-Type", "text/html");
 	}
 }
 
