@@ -6,7 +6,7 @@
 /*   By: kpineda- <kpineda-@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/01/08 18:51:13 by angnavar          #+#    #+#             */
-/*   Updated: 2026/03/08 12:37:48 by kpineda-         ###   ########.fr       */
+/*   Updated: 2026/03/08 12:51:49 by kpineda-         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -310,23 +310,18 @@ void Webserv::handleClientWrite(int fd)
 
     if (bytesSent > 0)
         client.writeBuffer.erase(0, bytesSent);
-    else if (bytesSent < 0)
-	{
+	else if (bytesSent < 0)
+    {
         std::cerr << RED << " [ERROR] Send failed on FD " << fd 
                   << ": " << strerror(errno) << RESET << std::endl;
-        epoll_ctl(this->epollFd, EPOLL_CTL_DEL, fd, NULL);
-        this->clients.erase(fd);
-        close(fd);
-        return;
+        this->closeConnection(fd);
     }
 
 	// 6. Closes connection
     if (client.writeBuffer.empty())
     {
-        std::cout << GREEN << "Response sent successfully to FD " << fd << RESET << std::endl;
-        epoll_ctl(this->epollFd, EPOLL_CTL_DEL, fd, NULL);
-        this->clients.erase(fd);
-        close(fd);
+        std::cout << GREEN << " [SUCCESS] Response sent successfully to FD " << fd << RESET << std::endl;
+        this->closeConnection(fd);
     }
 }
 

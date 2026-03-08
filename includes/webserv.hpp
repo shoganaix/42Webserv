@@ -6,7 +6,7 @@
 /*   By: kpineda- <kpineda-@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2025/12/10 20:21:23 by msoriano          #+#    #+#             */
-/*   Updated: 2026/03/08 12:21:11 by kpineda-         ###   ########.fr       */
+/*   Updated: 2026/03/08 12:51:59 by kpineda-         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -106,6 +106,12 @@ private:
 	void acceptNewConnection(int fd);
 	void handleClientData(int fd);
 	void handleClientWrite(int fd);
+    void closeConnection(int fd)
+    {
+        epoll_ctl(this->epollFd, EPOLL_CTL_DEL, fd, NULL);
+        this->clients.erase(fd);
+        close(fd);
+    }
 };
 
 #endif
