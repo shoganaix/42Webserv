@@ -3,10 +3,10 @@
 /*                                                        :::      ::::::::   */
 /*   webserv.hpp                                        :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: usuario <usuario@student.42.fr>            +#+  +:+       +#+        */
+/*   By: kpineda- <kpineda-@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2025/12/10 20:21:23 by msoriano          #+#    #+#             */
-/*   Updated: 2026/03/06 23:07:00 by usuario          ###   ########.fr       */
+/*   Updated: 2026/03/08 12:21:11 by kpineda-         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -81,14 +81,21 @@ struct Config
     std::map<int, std::string> error_pages;
 };
 
+struct ClientState
+{
+    int fd;
+    Config config;           // La configuración que le toca
+    std::string readBuffer;  // Lo que vamos recibiendo (por si llega por trozos)
+    std::string writeBuffer; // Lo que tenemos pendiente de enviar
+};
+
 class Webserv
 {
 	int						epollFd;
 	std::vector<int> 		fds;
     std::vector<Config>		config;
-	std::map<int, Config>	fdToConfig;
-
-public:
+	std::map<int, Config>	fdToConfig; // Mapea socket_escucha -> Config
+    std::map<int, ClientState> clients; // Centraliza los clientes
     Webserv(const std::string &configFile);
     ~Webserv() {};
     void run();
@@ -97,7 +104,8 @@ private:
     void setSockets();
 	bool isListeningFd(int fd);
 	void acceptNewConnection(int fd);
-	void handleClient(int fd);  
+	void handleClientData(int fd);
+	void handleClientWrite(int fd);
 };
 
 #endif

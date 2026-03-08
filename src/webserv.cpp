@@ -3,10 +3,10 @@
 /*                                                        :::      ::::::::   */
 /*   webserv.cpp                                        :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: usuario <usuario@student.42.fr>            +#+  +:+       +#+        */
+/*   By: kpineda- <kpineda-@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/01/08 18:51:13 by angnavar          #+#    #+#             */
-/*   Updated: 2026/03/07 01:04:10 by usuario          ###   ########.fr       */
+/*   Updated: 2026/03/08 12:37:48 by kpineda-         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -158,38 +158,46 @@ bool Webserv::isListeningFd(int fd)
     return false;
 }
 
-/*
+/* 
  * - Accepts a new client connection from a listening socket
  * - Sets the client socket to non-blocking mode & registers
  *    it in epoll instance for further monitoring
  */
 void Webserv::acceptNewConnection(int listeningFd)
 {
-    struct sockaddr_in clientAddr;
+    sockaddr_in clientAddr;
     socklen_t clientLen = sizeof(clientAddr);
     
     int clientFd = accept(listeningFd, (struct sockaddr *)&clientAddr, &clientLen);
     if (clientFd < 0)
-	{
-        std::cerr << "Error en accept: " << strerror(errno) << std::endl;
+    {
+        std::cerr << "Error in accept: " << strerror(errno) << std::endl;
         return;
     }
-
     fcntl(clientFd, F_SETFL, O_NONBLOCK);
-    struct epoll_event ev;
+
+    ClientState newClient;
+    newClient.fd = clientFd;
+    newClient.config = this->fdToConfig[listeningFd];
+    newClient.writeBuffer = "";
+    this->clients[clientFd] = newClient;
+
+    epoll_event ev;
     std::memset(&ev, 0, sizeof(ev));
     ev.events = EPOLLIN;
     ev.data.fd = clientFd;
 
     if (epoll_ctl(this->epollFd, EPOLL_CTL_ADD, clientFd, &ev) < 0)
-	{
-        std::cerr << "Error añadiendo cliente a epoll" << std::endl;
+    {
+        std::cerr << "Error adding client to epoll" << std::endl;
+        this->clients.erase(clientFd);
         close(clientFd);
         return;
     }
-    std::cout << YELLOW << "New connection accepted on FD " << clientFd << RESET << std::endl;
-}
 
+    std::cout << YELLOW << "New connection accepted on FD: " << clientFd 
+              << " for server: " << newClient.config.server_name << RESET << std::endl;
+}
 /*
  * Handles a client socket event:
  *  - Reads the HTTP request
@@ -249,13 +257,15 @@ void Webserv::acceptNewConnection(int listeningFd)
  *	send to client
  *
  */
-void Webserv::handleClient(int fd)
+void Webserv::handleClientData(int fd)
 {
 	char buffer[8192]; // 8192 -> 8 KB
     ssize_t bytes = recv(fd, buffer, sizeof(buffer), 0);
 
     if (bytes <= 0)
     {
+		epoll_ctl(this->epollFd, EPOLL_CTL_DEL, fd, NULL);
+        this->clients.erase(fd);
         close(fd);
         return;
     }
@@ -273,21 +283,53 @@ void Webserv::handleClient(int fd)
 
 	// 3. Serializes the generated response
 		//std::string rawResponse = res.serialize();
-
+	
  	// 4. Stores it in the client write buffer
-		// ClientState& client = clients[fd];                     
-		// client.writeBuffer = rawResponse;
+	ClientState &client = this->clients[fd];
+	std::string dummyResponse = "HTTP/1.1 200 OK\r\nContent-Length: 13\r\n\r\nHello Webserv";
+	client.writeBuffer = dummyResponse;
 
-    // 5. Sends HTTP response through non-blocking socket I/O
-		//send(fd, rawResponse.c_str(), rawResponse.size(), 0);
+	// --- CAMBIO A MODO ESCRITURA ---
+    // Le decimos a epoll que ahora queremos saber cuando el socket esté listo para enviar (OUT)
+    epoll_event ev;
+    std::memset(&ev, 0, sizeof(ev));
+    ev.events = EPOLLIN | EPOLLOUT; // Escuchamos ambos por seguridad
+    ev.data.fd = fd;
+    epoll_ctl(this->epollFd, EPOLL_CTL_MOD, fd, &ev);
+}
+
+void Webserv::handleClientWrite(int fd)
+{
+    ClientState &client = this->clients[fd];
+
+    if (client.writeBuffer.empty())
+        return;
+
+	// 5. Sends HTTP response through non-blocking socket I/O
+    ssize_t bytesSent = send(fd, client.writeBuffer.c_str(), client.writeBuffer.size(), 0);
+
+    if (bytesSent > 0)
+        client.writeBuffer.erase(0, bytesSent);
+    else if (bytesSent < 0)
+	{
+        std::cerr << RED << " [ERROR] Send failed on FD " << fd 
+                  << ": " << strerror(errno) << RESET << std::endl;
+        epoll_ctl(this->epollFd, EPOLL_CTL_DEL, fd, NULL);
+        this->clients.erase(fd);
+        close(fd);
+        return;
+    }
 
 	// 6. Closes connection
-		// if (client.writeBuffer.empty())
-		//{
-		//    cleanupClientConnection(fd);
-		//    close(fd);
-		//}
+    if (client.writeBuffer.empty())
+    {
+        std::cout << GREEN << "Response sent successfully to FD " << fd << RESET << std::endl;
+        epoll_ctl(this->epollFd, EPOLL_CTL_DEL, fd, NULL);
+        this->clients.erase(fd);
+        close(fd);
+    }
 }
+
 
 /*
  * -----------------------------MAIN EVENT LOOP USING EPOLL-----------------------------
@@ -332,7 +374,18 @@ void Webserv::run()
 			if (isListeningFd(fd))
 				acceptNewConnection(fd);
 			else
-				handleClient(fd);
+			{
+				// Si el socket está listo para leer
+				if (epoll_events[i].events & EPOLLIN)
+					handleClientData(fd);
+				// Si el socket está listo para escribir
+				if (epoll_events[i].events & EPOLLOUT)
+					handleClientWrite(fd);
+			}
+
+            // Limpiar y cerrar si el socket se rompe bruscamente
+			if (epoll_events[i].events & (EPOLLHUP | EPOLLERR))
+            	closeConnection(fd);
 		}
 	}
 }
