@@ -6,7 +6,7 @@
 /*   By: usuario <usuario@student.42.fr>            +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/02/11 20:53:33 by usuario           #+#    #+#             */
-/*   Updated: 2026/02/16 14:01:10 by usuario          ###   ########.fr       */
+/*   Updated: 2026/03/09 01:14:08 by usuario          ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -14,6 +14,7 @@
 #include "../includes/matchLocation.hpp"
 #include "../includes/pathResolver.hpp"
 #include "../includes/webserv.hpp"
+#include "../includes/cgiHandler.hpp"
 
 
 /*-----------------------------------------------------------------------
@@ -106,7 +107,7 @@ void printAllConfigs(const std::vector<Config> &cfgs)
 //-----------------------------------------------------------------------------------------
 
 /*-----------------------------------------------------------------------
- *                      🧪LOCATION MATCH TESTER🧪
+ *                      🧪FULL PATH RESOLVER TESTER🧪
  *
  * Simulates HTTP request URIs and verifies that the location matching & 
  * path resolving algorithm selects the correct final FILESYSTEM
@@ -161,10 +162,137 @@ void debugTestRoutingAndResolution(const std::vector<Config> &cfgs)
 }
 //-----------------------------------------------------------------------------------------
 
+/*-----------------------------------------------------------------------
+ *                      🖨️DEBUG: CGI PIPELINE🖨️
+ *
+ * This block of functions validates the CGI execution pipeline
+ *
+ * The debug tests verify:
+ *
+ *  - CGI detection based on file extension and location configuration
+ *  - Correct resolution of CGI handler, script path and working directory
+ *  - Environment variable generation passed to the CGI process
+ *  - Execution of the CGI script using fork() + execve()
+ *  - Reading the CGI output from stdout
+ *  - Parsing the CGI response into a valid HttpResponse
+ * -----------------------------------------------------------------------
+ */
 
+/*-----------------------------------------------------------------------
+ *                      🧪CGI DETECTION TESTER🧪
+ * Verifies whether a requested resource should be executed as CGI
+ * -----------------------------------------------------------------------
+ */
+void debugTestCgiDetection(const std::vector<Config>& cfgs)
+{
+    std::cout << BLUE << "\n======= CGI DETECTION TEST =======\n" << RESET;
 
+    std::vector<std::string> testUris;
+    testUris.push_back("/cgi-bin/time.py");
+    testUris.push_back("/cgi-bin/test.sh");
+    testUris.push_back("/tours/index.html");
+    testUris.push_back("/unknown/file.py");
 
+    for (size_t i = 0; i < cfgs.size(); ++i)
+    {
+        std::cout << YELLOW << "\nServer #" << (i + 1) << RESET << std::endl;
 
+        for (size_t j = 0; j < testUris.size(); ++j)
+        {
+            const std::string& uri = testUris[j];
+            const Location* loc = matchLocation(cfgs[i], uri);
+
+            std::cout << "\nURI: " << uri << std::endl;
+
+            if (!loc)
+            {
+                std::cout << "  matched location: NULL\n";
+                continue;
+            }
+
+            ResolvedPath rp = resolvePath(*loc, uri);
+            CgiTarget target = CgiHandler::detectCgi(*loc, rp.fsPath);
+
+            std::cout << "  matched location: " << loc->path << std::endl;
+            std::cout << "  fsPath: " << rp.fsPath << std::endl;
+            std::cout << "  isCgi: " << (target.isCgi ? "yes" : "no") << std::endl;
+            std::cout << "  extension: " << (target.extension.empty() ? "(empty)" : target.extension) << std::endl;
+            std::cout << "  handlerPath: " << (target.handlerPath.empty() ? "(empty)" : target.handlerPath) << std::endl;
+            std::cout << "  scriptPath: " << (target.scriptPath.empty() ? "(empty)" : target.scriptPath) << std::endl;
+            std::cout << "  workingDir: " << (target.workingDir.empty() ? "(empty)" : target.workingDir) << std::endl;
+        }
+    }
+
+    std::cout << BLUE << "==================================\n" << RESET;
+}
+
+/*-----------------------------------------------------------------------
+ *                      🧪CGI ENV TESTER🧪
+ * Builds the env variables that will be passed to the CGI
+ * process and prints them to verify correctness
+ * -----------------------------------------------------------------------
+ */
+void debugTestCgiEnv(const Config& cfg)
+{
+    const Location* loc = matchLocation(cfg, "/cgi-bin/time.py");
+    if (!loc)
+        return;
+
+    ResolvedPath rp = resolvePath(*loc, "/cgi-bin/time.py");
+    CgiTarget target = CgiHandler::detectCgi(*loc, rp.fsPath);
+    if (!target.isCgi)
+        return;
+
+    HttpRequest req;
+    req.method = "POST";
+    req.path = "/cgi-bin/time.py";
+    req.query = "name=maria&debug=1";
+    req.version = "HTTP/1.1";
+    req.body = "hello=world";
+    req.headers["Content-Type"] = "application/x-www-form-urlencoded";
+    req.headers["Host"] = "localhost:8080";
+
+    std::map<std::string, std::string> env = CgiHandler::buildEnv(req, target, cfg.server_name, cfg.port, "127.0.0.1");
+
+    std::cout << BLUE << "\n======= CGI ENV TEST =======\n" << RESET;
+    for (std::map<std::string, std::string>::const_iterator it = env.begin(); it != env.end(); ++it)
+        std::cout << it->first << "=" << it->second << std::endl;
+}
+
+/*-----------------------------------------------------------------------
+ *                      🧪CGI EXEC TESTER🧪
+ * Executes a CGI script using the configured handler and captures
+ * its raw output
+ * -----------------------------------------------------------------------
+ */
+void debugTestCgiExecution(const Config& cfg)
+{
+    const Location* loc = matchLocation(cfg, "/cgi-bin/time.py");
+    if (!loc)
+        return;
+
+    ResolvedPath rp = resolvePath(*loc, "/cgi-bin/time.py");
+    CgiTarget target = CgiHandler::detectCgi(*loc, rp.fsPath);
+    if (!target.isCgi)
+        return;
+
+    HttpRequest req;
+    req.method = "GET";
+    req.path = "/cgi-bin/time.py";
+    req.query = "";
+    req.version = "HTTP/1.1";
+    req.body = "";
+
+    CgiResult result = CgiHandler::execute(req, target, cfg.server_name, cfg.port,"127.0.0.1");
+
+    std::cout << BLUE << "\n======= CGI EXECUTION TEST =======\n" << RESET;
+    std::cout << "Exit code: " << result.exitCode << std::endl;
+    std::cout << "Raw output:\n" << result.rawOutput << std::endl;
+
+    HttpResponse res = CgiHandler::parseCgiOutput(result.rawOutput);
+    std::cout << "\nParsed CGI response:\n";
+    std::cout << res.toString() << std::endl;
+}
 
 
 

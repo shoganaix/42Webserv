@@ -6,7 +6,7 @@
 /*   By: usuario <usuario@student.42.fr>            +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2025/12/10 20:21:26 by msoriano          #+#    #+#             */
-/*   Updated: 2026/02/16 13:40:02 by usuario          ###   ########.fr       */
+/*   Updated: 2026/03/09 01:14:14 by usuario          ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -55,6 +55,9 @@ int main(int argc, char **argv)
             //debugTestLocationMatching(cfgs);
             //debugTestPathResolution(cfgs);
             debugTestRoutingAndResolution(cfgs);
+            debugTestCgiDetection(cfgs);
+            debugTestCgiEnv(cfgs[0]);
+            debugTestCgiExecution(cfgs[0]);
         #endif
         //--------------------------------------------------------------
         Webserv server(configFile);

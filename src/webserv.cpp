@@ -3,10 +3,10 @@
 /*                                                        :::      ::::::::   */
 /*   webserv.cpp                                        :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: kpineda- <kpineda-@student.42madrid.com    +#+  +:+       +#+        */
+/*   By: usuario <usuario@student.42.fr>            +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/01/08 18:51:13 by angnavar          #+#    #+#             */
-/*   Updated: 2026/03/08 13:55:12 by kpineda-         ###   ########.fr       */
+/*   Updated: 2026/03/09 01:39:05 by usuario          ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -15,14 +15,14 @@
  * ----------------------------TO DO:---------------------------------
  * HTTP parsing	❌
  * Routing	❌
- * Static files	❌
- * Autoindex	❌ -> Si la URI apunta a un directorio y no hay index,
+ * Static files	✅
+ * Autoindex	✅ -> Si la URI apunta a un directorio y no hay index,
  *                    entonces el servidor puede generar una página HTML 
  *                     con el listado de archivos del directorio
- * Error pages	❌
+ * Error pages	✅
  * Upload	❌
  * Chunked	❌     ->  Codifies body request HTTP
- * Non blocking IO correcto	❌
+ * Non blocking IO correcto	✅
 */
 
 /*-----------------------------------------------------------------------
@@ -270,6 +270,8 @@ void Webserv::handleClientData(int fd)
         return;
     }
 
+	// 0.client read buffer ??
+	
     std::string rawRequest(buffer, bytes);
     // 1. Parses request [⚠️HTTPREQUEST.CPP]
 		//HttpRequest req = parseRequest(rawRequest);
@@ -281,8 +283,8 @@ void Webserv::handleClientData(int fd)
 		//Router router(this->servers);
 		//HttpResponse res = router.route(req);
 
-	// 3. Serializes the generated response
-		//std::string rawResponse = res.serialize();
+	// 3. Serializes the generated response (obj to HTTP)
+		//std::string rawResponse = res.toString();
 	
  	// 4. Stores it in the client write buffer
 	ClientState &client = this->clients[fd];

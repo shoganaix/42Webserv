@@ -6,7 +6,7 @@
 /*   By: usuario <usuario@student.42.fr>            +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/03/02 18:57:01 by root              #+#    #+#             */
-/*   Updated: 2026/03/06 23:52:54 by usuario          ###   ########.fr       */
+/*   Updated: 2026/03/09 01:05:40 by usuario          ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -57,9 +57,10 @@ class CgiHandler
 		static CgiTarget detectCgi(const Location& loc, const std::string& fsPath);
 		static CgiResult execute(const HttpRequest& req, const CgiTarget& target, const std::string& serverName, int serverPort, const std::string& clientIp);
 		static HttpResponse parseCgiOutput(const std::string& rawOutput);
-
-	private:
 		static std::map<std::string, std::string> buildEnv(const HttpRequest& req, const CgiTarget& target, const std::string& serverName, int serverPort, const std::string& clientIp);
+		//buildEnv temporarily public to debug
+	private:
+		//static std::map<std::string, std::string> buildEnv(const HttpRequest& req, const CgiTarget& target, const std::string& serverName, int serverPort, const std::string& clientIp);
 		static std::vector<std::string> buildArgv(const CgiTarget& target);
 		static std::string dirnameOf(const std::string& path);
 		static std::string toUpperHeaderName(const std::string& key);
