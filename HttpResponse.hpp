@@ -6,7 +6,7 @@
 /*   By: kpineda- <kpineda-@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/02/20 13:48:43 by kpineda-          #+#    #+#             */
-/*   Updated: 2026/03/08 13:56:33 by kpineda-         ###   ########.fr       */
+/*   Updated: 2026/03/14 19:16:13 by kpineda-         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -73,6 +73,8 @@ public:
 	// POST handling method
 	bool savePostFile(const std::string& uploadPath, const std::string& body, const std::string& filename);
 	void handlePost(const std::string& body, const Location& loc, size_t maxSize);
+
+	void setRedirect(const std::string& location, int code);
 
 	//method to convert response to string format
 	std::string toString() const;

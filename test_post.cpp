@@ -6,7 +6,7 @@
 /*   By: kpineda- <kpineda-@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/03/08 12:39:05 by kpineda-          #+#    #+#             */
-/*   Updated: 2026/03/08 14:06:10 by kpineda-         ###   ########.fr       */
+/*   Updated: 2026/03/14 18:50:20 by kpineda-         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -35,7 +35,7 @@ int main() {
     // --- PRUEBA DE DELETE ---
     std::cout << "\n🚀 Probando DELETE..." << std::endl;
     // IMPORTANTE: Cambia este nombre por uno que SI exista en tu carpeta uploads_test
-    std::string archivoABorrar = "./uploads_test/file.txt"; 
+    std::string archivoABorrar = "/file.txt"; 
     
     res.handleDelete(archivoABorrar, loc); // Ahora 'loc' ya está definido arriba
     std::cout << res.toString() << std::endl;

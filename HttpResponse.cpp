@@ -6,7 +6,7 @@
 /*   By: kpineda- <kpineda-@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/02/20 13:48:49 by kpineda-          #+#    #+#             */
-/*   Updated: 2026/03/08 14:26:38 by kpineda-         ###   ########.fr       */
+/*   Updated: 2026/03/14 19:17:18 by kpineda-         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -238,7 +238,6 @@ void HttpResponse::handleDelete(const std::string& url, const Location& loc)
 		root += "/";
 
 	std::string fullPath = root + path;
-	
 
 	struct stat s;
 
@@ -330,6 +329,15 @@ void HttpResponse::handlePost(const std::string& body, const Location& loc, size
 		setBody("<html><body><h1>500 Internal Server Error</h1><p>Failed to save the uploaded file.</p></body></html>");
 		addHeader("Content-Type", "text/html");
 	}
+}
+
+void HttpResponse::setRedirect(const std::string& location, int code)
+{
+	clear();
+	setStatusCode(code);
+	addHeader("Location", location);
+	setBody("<html><body><h1>Redirecting...</h1><p>You are being redirected to <a href=\"" + location + "\">" + location + "</a>.</p></body></html>");
+	addHeader("Content-Type", "text/html");
 }
 
 std::string HttpResponse::toString() const
