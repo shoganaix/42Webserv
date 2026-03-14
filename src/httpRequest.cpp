@@ -3,10 +3,10 @@
 /*                                                        :::      ::::::::   */
 /*   httpRequest.cpp                                    :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: root <root@student.42.fr>                  +#+  +:+       +#+        */
+/*   By: kpineda- <kpineda-@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/03/03 21:07:34 by root              #+#    #+#             */
-/*   Updated: 2026/03/03 21:57:25 by root             ###   ########.fr       */
+/*   Updated: 2026/03/14 20:21:24 by kpineda-         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -45,6 +45,7 @@ void HttpRequest::parseRequestLine(const std::string& line)
 
 void HttpRequest::parseHeaderLine(const std::string& line)
 {
+    (void)line;
 }
 
 /*

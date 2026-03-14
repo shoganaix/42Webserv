@@ -3,22 +3,20 @@
 /*                                                        :::      ::::::::   */
 /*   httpRequest.hpp                                    :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: root <root@student.42.fr>                  +#+  +:+       +#+        */
+/*   By: kpineda- <kpineda-@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/02/20 13:48:43 by kpineda-          #+#    #+#             */
-<<<<<<< HEAD
-/*   Updated: 2026/03/03 21:57:18 by root             ###   ########.fr       */
-=======
-/*   Updated: 2026/03/14 19:49:40 by kpineda-         ###   ########.fr       */
->>>>>>> origin/main
+/*   Updated: 2026/03/14 20:19:29 by kpineda-         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
 #ifndef HTTPREQUEST_HPP
 # define HTTPREQUEST_HPP
 
-# include "webserv.hpp"
 # include <map>
+# include <string>
+# include <cstddef>
+# include <sstream>
 
 class HttpRequest
 {
@@ -40,8 +38,8 @@ class HttpRequest
 		bool parse(const std::string& rawRequest);
 
 	private:
-		void HttpRequest::parseRequestLine(const std::string& line);
-		void HttpRequest::parseHeaderLine(const std::string& line);
+		void parseRequestLine(const std::string& line);
+		void parseHeaderLine(const std::string& line);
 };
 
 #endif 
