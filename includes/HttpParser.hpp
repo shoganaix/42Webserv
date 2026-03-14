@@ -6,7 +6,7 @@
 /*   By: kpineda- <kpineda-@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/03/14 19:29:19 by kpineda-          #+#    #+#             */
-/*   Updated: 2026/03/14 19:29:38 by kpineda-         ###   ########.fr       */
+/*   Updated: 2026/03/14 19:31:31 by kpineda-         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -19,7 +19,7 @@
 class HttpParser
 {
 public:
-	static bool parseRequest(const std::string &rawRequest, HttpRequest &request);
+	static bool parseRequest(std::string &buffer, HttpRequest &req) ;
 };
 
 #endif

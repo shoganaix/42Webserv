@@ -6,7 +6,7 @@
 /*   By: kpineda- <kpineda-@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/02/20 13:48:43 by kpineda-          #+#    #+#             */
-/*   Updated: 2026/03/14 19:24:18 by kpineda-         ###   ########.fr       */
+/*   Updated: 2026/03/14 19:49:40 by kpineda-         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -14,6 +14,7 @@
 # define HTTPREQUEST_HPP
 
 # include "webserv.hpp"
+# include <map>
 
 class HttpRequest
 {

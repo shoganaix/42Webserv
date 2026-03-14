@@ -22,7 +22,8 @@ SRC =  src/main.cpp \
 		src/cgiHandler.cpp \
 		src/utils.cpp \
 		src/debug.cpp \
-		# src/httpRequest.cpp \
+		src/HttpParser.cpp \
+		src/httpRequest.cpp
 
 OBJ = $(SRC:%.cpp=build/%.o)
 
