@@ -6,14 +6,13 @@
 /*   By: kpineda- <kpineda-@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/02/20 13:48:43 by kpineda-          #+#    #+#             */
-/*   Updated: 2026/03/08 12:04:45 by kpineda-         ###   ########.fr       */
+/*   Updated: 2026/03/08 13:56:33 by kpineda-         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
 #ifndef HTTPRESPONSE_HPP
 # define HTTPRESPONSE_HPP
 
-# include "webserv.hpp"
 # include <sys/stat.h>
 # include <unistd.h>
 # include <dirent.h>
@@ -21,7 +20,18 @@
 # include <fstream>
 # include <string>
 # include <cstdio>
+# include <ctime>
 # include <map>
+
+#include <vector>
+
+	struct Location {
+    std::string root;
+    std::string upload_path;
+    std::vector<std::string> allow_methods;
+
+    Location() : root("./www"), upload_path("./uploads_test") {}
+	};
 
 class HttpResponse
 {
@@ -53,13 +63,14 @@ public:
 
 	// File loading method
 	void loadFile(const std::string& path);
-
 	// Generate AutoIndex
 	std::string generateAutoIndex(const std::string& path);
+	void handleGet(const std::string& url, const Location& loc);
 
-	void handleDelete(const std::string& fullpath);
+	// DELETE handling method
+	void handleDelete(const std::string& url, const Location& loc);
 	
-	
+	// POST handling method
 	bool savePostFile(const std::string& uploadPath, const std::string& body, const std::string& filename);
 	void handlePost(const std::string& body, const Location& loc, size_t maxSize);
 

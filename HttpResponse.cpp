@@ -6,7 +6,7 @@
 /*   By: kpineda- <kpineda-@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/02/20 13:48:49 by kpineda-          #+#    #+#             */
-/*   Updated: 2026/03/08 12:11:15 by kpineda-         ###   ########.fr       */
+/*   Updated: 2026/03/08 14:26:38 by kpineda-         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -31,8 +31,11 @@ void HttpResponse::initializeStatusMessages()
 	if ( !statusMessages.empty() )
 		return;
 	statusMessages[200] = "OK";
+	statusMessages[201] = "Created";
 	statusMessages[404] = "Not Found";
 	statusMessages[403] = "Forbidden";
+	statusMessages[405] = "Method Not Allowed";
+	statusMessages[413] = "Payload Too Large";
 	statusMessages[500] = "Internal Server Error";
 }
 
@@ -182,8 +185,61 @@ void HttpResponse::loadFile(const std::string& path)
 	}
 }
 
-void HttpResponse::handleDelete(const std::string& fullPath)
+void HttpResponse::handleGet(const std::string& url, const Location& loc)
 {
+	bool allowed = false;
+	for (size_t i = 0; i < loc.allow_methods.size(); ++i)
+	{
+		if (loc.allow_methods[i] == "GET")
+		{
+			allowed = true;
+			break;
+		}
+	}
+	
+	if (!allowed)
+	{
+		setStatusCode(405);
+		setBody("<html><body><h1>405 Method Not Allowed</h1><p>GET method is not allowed for this resource.</p></body></html>");
+		addHeader("Content-Type", "text/html");
+		return;
+	}
+
+	std::string fullPath = loc.root + url;
+	loadFile(fullPath);
+}
+
+void HttpResponse::handleDelete(const std::string& url, const Location& loc)
+{
+	bool allowed = false;
+	for (size_t i = 0; i < loc.allow_methods.size(); ++i)
+	{
+		if (loc.allow_methods[i] == "DELETE")
+		{
+			allowed = true;
+			break;
+		}
+	}
+	
+	if (!allowed)
+	{
+		setStatusCode(405);
+		setBody("<html><body><h1>405 Method Not Allowed</h1><p>DELETE method is not allowed for this resource.</p></body></html>");
+		addHeader("Content-Type", "text/html");
+		return;
+	}
+
+	std::string root = loc.root;
+	std::string path = url;
+
+	if (!root.empty() && root[root.length() - 1] == '/' && !path.empty() && path[0] == '/')
+		path = path.substr(1);
+	else if (!root.empty() && root[root.length() - 1] != '/' && !path.empty() && path[0] != '/')
+		root += "/";
+
+	std::string fullPath = root + path;
+	
+
 	struct stat s;
 
 	if (stat(fullPath.c_str(), &s) != 0)
@@ -192,15 +248,13 @@ void HttpResponse::handleDelete(const std::string& fullPath)
 		setBody("<html><body><h1>404 Not Found</h1><p>El archivo no existe.</p></body></html>");
 		return;
 	}
-
-	if (S_ISDIR(s.st_mode))
+	else if (S_ISDIR(s.st_mode))
 	{
 		setStatusCode(403);
 		setBody("<html><body><h1>403 Forbidden</h1><p>No se pueden borrar directorios.</p></body></html>");
 		return;
 	}
-	
-	if (unlink(fullPath.c_str()) == 0)
+	else if (unlink(fullPath.c_str()) == 0)
 	{
 		setStatusCode(200);
 		setBody("<html><body><h1>File Deleted</h1><p>El recurso ha sido eliminado.</p></body></html>");
@@ -254,14 +308,18 @@ void HttpResponse::handlePost(const std::string& body, const Location& loc, size
 		return;
 	}
 
-	std::string path = loc.upload_path.empty() ? loc.root : loc.upload_path;
-	std::string fullPath = path + "/uploaded_file.txt";
+	std::stringstream fileName;
+	fileName << "upload_" << time(0) << ".txt";
+	
+	std::string path = loc.upload_path.empty() ? "." : loc.upload_path;
+	std::string fullPath = path + "/" + fileName.str();
 	
 	std::ofstream outFile(fullPath.c_str(), std::ios::out | std::ios::binary);
 	if (outFile.is_open())
 	{
 		outFile << body;
 		outFile.close();
+		
 		setStatusCode(201);
 		setBody("<html><body><h1>201 Created</h1><p>File uploaded successfully.</p></body></html>");
 		addHeader("Content-Type", "text/html");
