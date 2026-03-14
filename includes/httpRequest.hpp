@@ -3,10 +3,10 @@
 /*                                                        :::      ::::::::   */
 /*   httpRequest.hpp                                    :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: usuario <usuario@student.42.fr>            +#+  +:+       +#+        */
+/*   By: kpineda- <kpineda-@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/02/20 13:48:43 by kpineda-          #+#    #+#             */
-/*   Updated: 2026/03/06 23:08:54 by usuario          ###   ########.fr       */
+/*   Updated: 2026/03/14 19:24:18 by kpineda-         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -23,9 +23,13 @@ class HttpRequest
 		std::string body;
 		std::map<std::string, std::string> headers;
 		std::string version;
-		std::string query; // Query extracted from URL(search?q=cat&page=2)
+		std::string query;
 
-	HttpRequest() {};
+		bool headersFinished; // ¿Ya encontramos el \r\n\r\n?
+        bool bodyFinished;    // ¿Ya leímos todo el Content-Length?
+        size_t contentLength; // Para saber cuántos bytes de cuerpo faltan
+
+    HttpRequest() : headersFinished(false), bodyFinished(false), contentLength(0) {};
 };
 
 #endif 

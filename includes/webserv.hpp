@@ -6,7 +6,7 @@
 /*   By: kpineda- <kpineda-@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2025/12/10 20:21:23 by msoriano          #+#    #+#             */
-/*   Updated: 2026/03/08 13:05:02 by kpineda-         ###   ########.fr       */
+/*   Updated: 2026/03/14 19:26:15 by kpineda-         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -14,6 +14,7 @@
 #define WEBSERV_HPP
 
 #include "colors.hpp"
+#include "httpRequest.hpp"
 #include <exception>
 
 #include <iostream>      // std::cout, std::cerr
@@ -87,6 +88,10 @@ struct ClientState
     Config config;           // La configuración que le toca
     std::string readBuffer;  // Lo que vamos recibiendo (por si llega por trozos)
     std::string writeBuffer; // Lo que tenemos pendiente de enviar
+    bool isRequestFinished;  // <-- Añade esto para saber cuándo parar de leer
+    HttpRequest request;     // <-- Donde guardarás los datos parseados
+    
+    ClientState() : fd(-1), isRequestFinished(false) {}
 };
 
 class Webserv
