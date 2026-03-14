@@ -3,10 +3,10 @@
 /*                                                        :::      ::::::::   */
 /*   webserv.cpp                                        :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: kpineda- <kpineda-@student.42madrid.com    +#+  +:+       +#+        */
+/*   By: root <root@student.42.fr>                  +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/01/08 18:51:13 by angnavar          #+#    #+#             */
-/*   Updated: 2026/03/14 19:51:13 by kpineda-         ###   ########.fr       */
+/*   Updated: 2026/03/14 22:44:39 by root             ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -47,6 +47,7 @@
 #include "webserv.hpp"
 #include "configParser.hpp"
 #include "validation.hpp"
+#include "httpResponse.hpp"
 
 /*
  * - Receives path to conf at startup
@@ -61,6 +62,10 @@ Webserv::Webserv(const std::string &configFile)
 	// 1) Parse configuration
 	ConfigParser parser;
 	this->config = parser.parse(configFile);
+	for(size_t i=0; i < this->config.size(); i++)
+	{
+		std::cout << this->config[i].locations[1].path << std::endl;
+	}
 
 	// 2) Normalize + validate configuration
 	validateAllServers(this->config);
@@ -257,6 +262,55 @@ void Webserv::acceptNewConnection(int listeningFd)
  *	send to client
  *
  */
+
+HttpResponse Webserv::routeRequest(const HttpRequest& req, const Config &server)
+{
+	HttpResponse res;
+
+    // 1. Buscar location coincidente
+    const Location* loc = NULL;
+    for (size_t i = 0; i < server.locations.size(); ++i)
+    {
+        if (req.path.find(server.locations[i].path) == 0)
+        {
+            loc = &server.locations[i];
+			std::cout << loc << std::endl;
+            break;
+        }
+    }
+
+	std::cout << req.path << std::endl;
+		//std::cout << server.locations[i].path << std::endl;
+    // 2. Si no hay location → 404
+    if (!loc)
+    {
+        res.setStatusCode(404);
+        res.setBody("<html><body><h1>404 Not Found</h1></body></html>");
+        res.addHeader("Content-Type", "text/html");
+        return res;
+    }
+
+    // 3. Llamar al handler correcto
+    if (req.method == "GET")
+        res.handleGet(req.path.substr(loc->path.size()), *loc);
+    else if (req.method == "POST")
+        res.handlePost(req.body, *loc, server.client_max_body_size);
+    else if (req.method == "DELETE")
+        res.handleDelete(req.path.substr(loc->path.size()), *loc);
+    else
+    {
+        res.setStatusCode(405);
+        res.setBody("<html><body><h1>405 Method Not Allowed</h1></body></html>");
+        res.addHeader("Content-Type", "text/html");
+    }
+
+    // 4. Redirección si existe
+    if (!loc->redir.empty())
+        res.setRedirect(loc->redir, 302); //default code ?
+
+    return (res);
+}
+
 void Webserv::handleClientData(int fd)
 {
 	char buffer[8192]; // 8192 -> 8 KB
@@ -269,47 +323,53 @@ void Webserv::handleClientData(int fd)
         close(fd);
         return;
     }
-
-    // 1. Parses request [⚠️HTTPREQUEST.CPP]
-		//HttpRequest req = parseRequest(rawRequest);
-		   // parses request line, headers and body
-		   // if Transfer-Encoding: chunked → rebuild body
-		   // separates query string from path
-
-    // 2. Routes it [⚠️ROUTER.CPP]
-		//Router router(this->servers);
-		//HttpResponse res = router.route(req);
-
-	// 3. Serializes the generated response
-		//std::string rawResponse = res.serialize();
 	
- 	// 4. Stores it in the client write buffer
+ 	// 1. Client detected or error
 	ClientState &client = this->clients[fd];
+	std::cout << client.config.locations[1].path << std::endl;
 	client.readBuffer.append(buffer, bytes);
-	if (HttpParser::parseRequest(client.readBuffer, client.request))
-    {
-        // SI ENTRA AQUÍ, es que parseRequest devolvió 'true' (Petición completa)
-        
-        // 2. Aquí iría el Routing (Rol 4)
-        // Router router(this->servers);
-        // HttpResponse res = router.route(client.request);
+	try{
+		if (client.request.parse(client.readBuffer))
+		{
+			// SI ENTRA AQUÍ, es que parseRequest devolvió 'true' (Petición completa)
+				
+			// 2. Aquí VA Routing (Rol 4)
+			Config* server = &this->clients[fd].config;
+			HttpResponse res = routeRequest(client.request, *server);
+			client.writeBuffer = res.toString();
 
-        // 3. De momento, respuesta de prueba
-        std::string response = 
-            "HTTP/1.1 200 OK\r\n"
-            "Content-Type: text/plain\r\n"
-            "Content-Length: 13\r\n"
-            "Connection: close\r\n"
-            "\r\n"
-            "Hello Webserv";
-        client.writeBuffer = response;
+			epoll_event ev;
+            std::memset(&ev, 0, sizeof(ev));
+            ev.events = EPOLLOUT;
+            ev.data.fd = fd;
+            epoll_ctl(this->epollFd, EPOLL_CTL_MOD, fd, &ev);
 
-        // 4. CAMBIO A MODO ESCRITURA (EPOLLOUT)
-        epoll_event ev;
-        std::memset(&ev, 0, sizeof(ev));
-        ev.events = EPOLLOUT; 
-        ev.data.fd = fd;
-        epoll_ctl(this->epollFd, EPOLL_CTL_MOD, fd, &ev);
+            client.readBuffer.clear(); // listo para próxima request
+
+			// 3. De momento, respuesta de prueba
+			//std::string response = 
+			//	"HTTP/1.1 200 OK\r\n"
+			//	"Content-Type: text/plain\r\n"
+			//	"Content-Length: 13\r\n"
+			//	"Connection: close\r\n"
+			//	"\r\n"
+			//	"Hello Webserv";
+			//client.writeBuffer = response;
+        }
+	}
+	catch (std::exception &e){
+		HttpResponse res;
+		res.setStatusCode(400);
+		res.setBody("<html><body><h1>400 Bad Request</h1></body></html>");
+		res.addHeader("Content-Type", "text/html");
+		client.writeBuffer = res.toString();
+
+		// 6. CAMBIO A MODO ESCRITURA (EPOLLOUT)
+		epoll_event ev;
+		std::memset(&ev, 0, sizeof(ev));
+		ev.events = EPOLLOUT; 
+		ev.data.fd = fd;
+		epoll_ctl(this->epollFd, EPOLL_CTL_MOD, fd, &ev);
         
         // Limpiamos el buffer de lectura para que esté listo para la siguiente petición
         client.readBuffer.clear();

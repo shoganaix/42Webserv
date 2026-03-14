@@ -3,14 +3,16 @@
 /*                                                        :::      ::::::::   */
 /*   httpResponse.cpp                                   :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: kpineda- <kpineda-@student.42.fr>          +#+  +:+       +#+        */
+/*   By: root <root@student.42.fr>                  +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/02/20 13:48:49 by kpineda-          #+#    #+#             */
-/*   Updated: 2026/03/14 19:56:36 by kpineda-         ###   ########.fr       */
+/*   Updated: 2026/03/14 22:47:14 by root             ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
 #include "httpResponse.hpp"
+#include <iostream>
+#include "colors.hpp"
 
 // Static member definitions
 std::map<int, std::string> HttpResponse::statusMessages;
@@ -124,6 +126,8 @@ std::string HttpResponse::generateAutoIndex(const std::string& path)
 void HttpResponse::loadFile(const std::string& path)
 {
 	struct stat path_stat;
+	std::cout << GREEN << path << RESET << std::endl;
+
 	// Verify if the file exists and is a regular file
 	if (stat(path.c_str(), &path_stat) != 0)
 	{

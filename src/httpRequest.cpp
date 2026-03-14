@@ -3,10 +3,10 @@
 /*                                                        :::      ::::::::   */
 /*   httpRequest.cpp                                    :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: kpineda- <kpineda-@student.42madrid.com    +#+  +:+       +#+        */
+/*   By: root <root@student.42.fr>                  +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/03/03 21:07:34 by root              #+#    #+#             */
-/*   Updated: 2026/03/14 20:21:24 by kpineda-         ###   ########.fr       */
+/*   Updated: 2026/03/03 23:27:44 by root             ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -67,8 +67,8 @@ bool HttpRequest::parse(const std::string &raw)
 
     if (!std::getline(stream, line))
          throw (std::runtime_error("Empty HTTP request"));
-    if (!line.empty() && line.back() == '\r') // (CR character from Windows-style line endings)
-        line.pop_back();
+    if (!line.empty() && line[line.size() - 1] == '\r') // (CR character from Windows-style line endings)
+        line.erase(line.size() - 1);
 
     try {
         parseRequestLine(line);
@@ -79,8 +79,8 @@ bool HttpRequest::parse(const std::string &raw)
     // HEADERS (map)
     while (std::getline(stream, line))
     {
-        if (!line.empty() && line.back() == '\r')
-            line.pop_back();
+        if (!line.empty() && line[line.size() - 1] == '\r')
+            line.erase(line.size() - 1);
         if (line.empty())
             break;
         try {
@@ -95,7 +95,7 @@ bool HttpRequest::parse(const std::string &raw)
     {
         size_t len = 0;
         try {
-            len = std::stoul(headers["content-length"]);
+            len = std::strtoul(headers["content-length"].c_str(), NULL, 10);
         }
         catch (std::exception &e) {
             throw (std::runtime_error("Invalid Content-Length value"));

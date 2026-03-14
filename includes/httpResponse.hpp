@@ -3,17 +3,16 @@
 /*                                                        :::      ::::::::   */
 /*   httpResponse.hpp                                   :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: kpineda- <kpineda-@student.42.fr>          +#+  +:+       +#+        */
+/*   By: root <root@student.42.fr>                  +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/02/20 13:48:43 by kpineda-          #+#    #+#             */
-/*   Updated: 2026/03/14 19:58:19 by kpineda-         ###   ########.fr       */
+/*   Updated: 2026/03/03 23:15:52 by root             ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
 #ifndef HTTPRESPONSE_HPP
 # define HTTPRESPONSE_HPP
 
-# include "webserv.hpp"
 # include <sys/stat.h>
 # include <unistd.h>
 # include <dirent.h>
@@ -23,6 +22,24 @@
 # include <cstdio>
 # include <ctime>
 # include <map>
+# include <vector>
+
+struct Location
+{
+    //In C++98, if you don't define a constructor, those fields can remain undefined
+    // (Memory garbage → random errors)
+    Location(): autoindex(false), path("/"), root(""), index(""), redir(""), upload_path("")
+    {}
+
+    bool autoindex;
+    std::string path;
+    std::string root;
+    std::string index;
+    std::string redir;
+    std::string upload_path;
+    std::vector<std::string> allow_methods;
+    std::map<std::string, std::string> cgi_needs;
+};
 
 class HttpResponse
 {

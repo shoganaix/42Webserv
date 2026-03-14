@@ -6,7 +6,7 @@
 /*   By: root <root@student.42.fr>                  +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/02/11 21:35:18 by usuario           #+#    #+#             */
-/*   Updated: 2026/03/03 21:20:00 by root             ###   ########.fr       */
+/*   Updated: 2026/03/03 22:46:18 by root             ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -15,11 +15,6 @@
 
 #include "webserv.hpp"
 #include "httpRequest.hpp"
-
-//Validates CONFIG on runtime
-static bool isValidMethod(const std::string& m);
-static bool isValidHttpErrorCode(int code);
-static void validateLocation(const Location& loc, const Config& cfg);
 
 void validateServer(const Config& cfg);
 void validateAllServers(const std::vector<Config>& cfgs);

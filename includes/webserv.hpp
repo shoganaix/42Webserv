@@ -3,10 +3,10 @@
 /*                                                        :::      ::::::::   */
 /*   webserv.hpp                                        :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: kpineda- <kpineda-@student.42madrid.com    +#+  +:+       +#+        */
+/*   By: root <root@student.42.fr>                  +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2025/12/10 20:21:23 by msoriano          #+#    #+#             */
-/*   Updated: 2026/03/14 19:37:03 by kpineda-         ###   ########.fr       */
+/*   Updated: 2026/03/03 23:16:22 by root             ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -15,7 +15,9 @@
 
 #include "colors.hpp"
 #include "httpRequest.hpp"
+#include "httpResponse.hpp"
 #include "HttpParser.hpp"
+
 #include <exception>
 
 #include <iostream>      // std::cout, std::cerr
@@ -47,22 +49,7 @@
 #include <sys/types.h>   // basic data types for sockets
 #include <sys/epoll.h>   // epoll_create1(), epoll_ctl(), epoll_wait()
 
-struct Location
-{
-    //In C++98, if you don't define a constructor, those fields can remain undefined
-    // (Memory garbage → random errors)
-    Location(): autoindex(false), path("/"), root(""), index(""), redir(""), upload_path("")
-    {}
 
-    bool autoindex;
-    std::string path;
-    std::string root;
-    std::string index;
-    std::string redir;
-    std::string upload_path;
-    std::vector<std::string> allow_methods;
-    std::map<std::string, std::string> cgi_needs;
-};
 
 struct Config
 {
@@ -120,6 +107,7 @@ private:
         this->clients.erase(fd);
         close(fd);
     }
+    HttpResponse routeRequest(const HttpRequest &req, const Config &server);
 };
 
 #endif
