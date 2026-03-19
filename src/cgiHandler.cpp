@@ -6,7 +6,7 @@
 /*   By: usuario <usuario@student.42.fr>            +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/03/02 18:05:15 by root              #+#    #+#             */
-/*   Updated: 2026/03/07 00:11:56 by usuario          ###   ########.fr       */
+/*   Updated: 2026/03/19 19:21:34 by usuario          ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -94,29 +94,29 @@ std::map<std::string, std::string> CgiHandler::buildEnv(const HttpRequest& req, 
 {
 	std::map<std::string, std::string> env;
 	env["GATEWAY_INTERFACE"] = "CGI/1.1";
-	env["SERVER_PROTOCOL"] = req.version.empty() ? "HTTP/1.1" : req.version;
-	env["REQUEST_METHOD"] = req.method;
-	env["QUERY_STRING"] = req.query;
+	env["SERVER_PROTOCOL"] = req.getVersion().empty() ? "HTTP/1.1" : req.getVersion();
+	env["REQUEST_METHOD"] = req.getMethod();
+	env["QUERY_STRING"] = req.getQuery();
 	env["SCRIPT_FILENAME"] = target.scriptPath;
-	env["SCRIPT_NAME"] = req.path;
+	env["SCRIPT_NAME"] = req.getPath();
 	env["SERVER_NAME"] = serverName;
 	env["REMOTE_ADDR"] = clientIp;
 	env["REDIRECT_STATUS"] = "200";
     env["SERVER_PORT"] = intToString(serverPort);
 	std::map<std::string, std::string>::const_iterator it;
-	it = req.headers.find("Content-Type");
+	it = req.getHeaders().find("Content-Type");
 
-	if (it != req.headers.end())
+	if (it != req.getHeaders().end())
 		env["CONTENT_TYPE"] = it->second;
 	else
 	{
-		it = req.headers.find("content-type");
-		if (it != req.headers.end())
+		it = req.getHeaders().find("content-type");
+		if (it != req.getHeaders().end())
 			env["CONTENT_TYPE"] = it->second;
 	}
-	if (!req.body.empty())
-        env["CONTENT_LENGTH"] = intToString(req.body.size());
-	for (it = req.headers.begin(); it != req.headers.end(); ++it)
+	if (!req.getBody().empty())
+        env["CONTENT_LENGTH"] = intToString(req.getBody().size());
+	for (it = req.getHeaders().begin(); it != req.getHeaders().end(); ++it)
 	{
 		if (it->first == "Content-Type" || it->first == "content-type" || it->first == "Content-Length" || it->first == "content-length")
 			continue;
@@ -202,12 +202,12 @@ CgiResult CgiHandler::execute(const HttpRequest& req, const CgiTarget& target, c
 	}
 	safeClose(inPipe[0]);
 	safeClose(outPipe[1]);
-	if (!req.body.empty())
+	if (!req.getBody().empty())
 	{
 		size_t written = 0;
-		while (written < req.body.size())
+		while (written < req.getBody().size())
 		{
-			ssize_t n = write(inPipe[1], req.body.data() + written, req.body.size() - written);
+			ssize_t n = write(inPipe[1], req.getBody().data() + written, req.getBody().size() - written);
 			if (n < 0)
 				break;
 			written += static_cast<size_t>(n);

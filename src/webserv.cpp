@@ -3,26 +3,52 @@
 /*                                                        :::      ::::::::   */
 /*   webserv.cpp                                        :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: root <root@student.42.fr>                  +#+  +:+       +#+        */
+/*   By: usuario <usuario@student.42.fr>            +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/01/08 18:51:13 by angnavar          #+#    #+#             */
-/*   Updated: 2026/03/14 22:44:39 by root             ###   ########.fr       */
+/*   Updated: 2026/03/19 20:16:16 by usuario          ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
 
-/* BORRAR LUEGO:
+/* DELETE LATER:
  * ----------------------------TO DO:---------------------------------
- * HTTP parsing	❌
- * Routing	❌
- * Static files	❌
- * Autoindex	❌ -> Si la URI apunta a un directorio y no hay index,
- *                    entonces el servidor puede generar una página HTML 
- *                     con el listado de archivos del directorio
- * Error pages	❌
- * Upload	❌
- * Chunked	❌     ->  Codifies body request HTTP
- * Non blocking IO correcto	❌
+ * HTTP parsing	    ✔
+ * BASIC routing	✔
+ * Static files	    ✔
+ * Autoindex	    ✔ 
+ * 	-> Si la URI apunta a un directorio y no hay index,
+ *      entonces el servidor puede generar una página HTML 
+ *      con el listado de archivos del directorio
+ * Chunked	       ✔    
+ *  ->  Codifies body request HTTP
+ * CGI in route    ✔
+ * 
+ * Error pages	   ❌
+ * - HTML hardcodeado para 404, 403, 405, 413, 500 ...
+ * - Eso cubre la parte “default” de forma básica pero no demuestra que esté leyendo y sirviendo páginas de error desde la config.
+ * 
+ * Upload	       ❌
+ * - El subject pide que los clientes puedan subir archivos y que en config puedas autorizar subida y definir storage location
+ * - En handlePost() se guarda el body tal cual en upload_<timestamp>.txt dentro de upload_path o "."
+ * - PERO
+ *    -> no se valida bien si la ruta de upload existe
+ *    -> no se gestiona multipart/form-data
+ *    -> no se recupera el nombre real del fichero
+ *    -> no se distingue entre POST “normal” y una subida real
+ *    -> no se garantiza luego “upload some file to the server and get it back” como pide la evaluation sheet
+ * 
+ * Non blocking IO ❌ 
+ * - Usar un solo poll() o equivalente para lectura y escritura
+ * - Está prohibido ajustar el comportamiento mirando errno después de read o write. 
+ * - Si revisan errno tras read/recv/write/send, la evaluación es un 0 (revisar handleClientData() y handleClientWrite())
+ * 
+ * Default file for directories ❌ 
+ * - El subject dice que en config debes poder definir el fichero por defecto cuando el recurso pedido es un directorio.
+ * - En handleGet() si el target es directorio:
+ *   autoindex está on, generas listing, si no, se devuelves 403
+ *   PERO NO si ya hay autoindex, mostrar index por directorio
+
 */
 
 /*-----------------------------------------------------------------------
@@ -47,7 +73,11 @@
 #include "webserv.hpp"
 #include "configParser.hpp"
 #include "validation.hpp"
+#include "matchLocation.hpp"
+#include "utils.hpp"
 #include "httpResponse.hpp"
+#include "cgiHandler.hpp"
+#include "pathResolver.hpp"
 
 /*
  * - Receives path to conf at startup
@@ -62,11 +92,6 @@ Webserv::Webserv(const std::string &configFile)
 	// 1) Parse configuration
 	ConfigParser parser;
 	this->config = parser.parse(configFile);
-	for(size_t i=0; i < this->config.size(); i++)
-	{
-		std::cout << this->config[i].locations[1].path << std::endl;
-	}
-
 	// 2) Normalize + validate configuration
 	validateAllServers(this->config);
 }
@@ -203,36 +228,27 @@ void Webserv::acceptNewConnection(int listeningFd)
     std::cout << YELLOW << "New connection accepted on FD: " << clientFd 
               << " for server: " << newClient.config.server_name << RESET << std::endl;
 }
+
 /*
- * Handles a client socket event:
- *  - Reads the HTTP request
- * 
- *  📌TO DO:📌
- *  - Parses the request
- *  - Routes it through router.cpp (router decides how sever must respond to a request)
- *    [ route.cpp ]
- *    { 
- *		- selects the server
- *		- calls parsing location and path resolver
- *		- checks allowed methods in loc.allow_methods
- *		- checks client_max_body_size limits in loc.client_max_body_size
- *		- handles configured redirections (return)
- *      - calls detect cgi & CgiHandler if so
- *      - detects if the request targets a directory
- *            -> performs Autoindex or Index
- *      - detects if request targets a regular file
- *            -> calls staticFileHandler
- *      - handles uploads
- *            -> calls upload handler if needed
- *      - handles HTTP errors
- *            -> builds ErrorResponse (404, 403, 405, 413, 500, ...)
- *      - returns a complete HttpResponse object
- *    }
- *  - Serializes the generated HTTP response
- *  - Stores it in the client write buffer
- *  - Sends response through non-blocking socket I/O
- *  - Closes connection when the full response has been sent
- * 
+ * Routes a parsed HTTP request accroding to server and location
+ * (router decides how sever must respond to a request)
+ * 	1. Matches request path  configured locations
+ *       If no matching location found -> returns 404
+ *  2. Handles redirections before any further processing
+ *  3. Checks wether HTTP method allowed 
+ *  4. Rejects request if body exceeds client_max_body_size
+ *  5. Resolves request URI into a real path (FILESYSTEM)
+ *  6. Detects whether target must be executed as CGI
+ *    If the request IS  CGI:
+ *          a) builds the CGI target description
+ *          b) executes program
+ *          c) parses output into an HttpResponse
+ *    If the request IS NOT CGI:
+ *      	a) computes relative path inside matched location
+ *      	b) dispatches request to method handler
+ *  7. Returns a fully built HttpResponse object
+ *   📌TO DO:📌
+ *      - ...
  * ------------------------------ STRUCTURE ---------------------------
  * 
  * 	socket accepted
@@ -262,78 +278,136 @@ void Webserv::acceptNewConnection(int listeningFd)
  *	send to client
  *
  */
-
 HttpResponse Webserv::routeRequest(const HttpRequest& req, const Config &server)
 {
 	HttpResponse res;
+	// 1. Match location algorythm
+	const Location* loc = matchLocation(server, req.getPath());
+	// STEPS 2, 3 & 4: MOVED FROM HTTPRESPONSE
+	//   - Why? HttpResponse shouldnt be the one deciding if reqeust can or cannotr execute but only handle reponse after core decides
 
-    // 1. Buscar location coincidente
-    const Location* loc = NULL;
-    for (size_t i = 0; i < server.locations.size(); ++i)
-    {
-        if (req.path.find(server.locations[i].path) == 0)
-        {
-            loc = &server.locations[i];
-			std::cout << loc << std::endl;
-            break;
-        }
-    }
-
-	std::cout << req.path << std::endl;
-		//std::cout << server.locations[i].path << std::endl;
-    // 2. Si no hay location → 404
+    // 2. If NO location        → 404
+	//	  	 redirection        → 302
     if (!loc)
     {
         res.setStatusCode(404);
         res.setBody("<html><body><h1>404 Not Found</h1></body></html>");
         res.addHeader("Content-Type", "text/html");
-        return res;
+        return (res);
+    }
+	if (!loc->redir.empty())
+    {
+        res.setRedirect(loc->redir, 302);
+        return (res);
+    }
+    // 3. Check allowed methods
+	bool allowed = false;
+	for (size_t i = 0; i < loc->allow_methods.size(); ++i)
+	{
+		if (loc->allow_methods[i] == req.getMethod())
+		{
+			allowed = true;
+			break;
+		}
+	}
+	if (!allowed)
+	{
+		res.setStatusCode(405);
+		res.setBody("<html><body><h1>405 Method Not Allowed</h1></body></html>");
+		res.addHeader("Content-Type", "text/html");
+		return (res);
+	}
+	// 4. Check allowed client_max_body_size
+    if (req.getBody().length() > server.client_max_body_size)
+    {
+        res.setStatusCode(413);
+        res.setBody("<html><body><h1>413 Payload Too Large</h1></body></html>");
+        res.addHeader("Content-Type", "text/html");
+        return (res);
+    }
+	// 5. Resolve real path (FILESYSTEM)
+    ResolvedPath resolved = resolvePath(*loc, req.getPath());
+
+	// 5. Calling CGIHandler if necessary
+  	if (isCgiRequest(*loc, resolved.fsPath))
+    {
+        try
+        {
+            CgiHandler cgi;
+            CgiTarget target = cgi.detectCgi(*loc, resolved.fsPath);
+            CgiResult result = cgi.execute(req, target, server.server_name, server.port, "127.0.0.1");
+            return (cgi.parseCgiOutput(result.rawOutput));
+        }
+        catch (std::exception &e)
+        {
+            res.setStatusCode(500);
+            res.setBody("<html><body><h1>500 Internal Server Error</h1></body></html>");
+            res.addHeader("Content-Type", "text/html");
+            return (res);
+        }
     }
 
-    // 3. Llamar al handler correcto
-    if (req.method == "GET")
-        res.handleGet(req.path.substr(loc->path.size()), *loc);
-    else if (req.method == "POST")
-        res.handlePost(req.body, *loc, server.client_max_body_size);
-    else if (req.method == "DELETE")
-        res.handleDelete(req.path.substr(loc->path.size()), *loc);
+    // 7. Relative path for normal handlers
+    std::string relativePath = req.getPath().substr(loc->path.size());
+    if (relativePath.empty())
+        relativePath = "/";
+
+	// 8. Dispatch method
+    if (req.getMethod() == "GET")
+        res.handleGet(relativePath, *loc);
+    else if (req.getMethod() == "POST")
+        res.handlePost(req.getBody(), *loc);
+    else if (req.getMethod() == "DELETE")
+        res.handleDelete(relativePath, *loc);
     else
     {
         res.setStatusCode(405);
         res.setBody("<html><body><h1>405 Method Not Allowed</h1></body></html>");
         res.addHeader("Content-Type", "text/html");
     }
-
-    // 4. Redirección si existe
-    if (!loc->redir.empty())
-        res.setRedirect(loc->redir, 302); //default code ?
-
     return (res);
 }
 
+/*
+ * Handles a client socket event:
+ *  - Reads the HTTP request
+ *  - ...
+ */
 void Webserv::handleClientData(int fd)
 {
 	char buffer[8192]; // 8192 -> 8 KB
     ssize_t bytes = recv(fd, buffer, sizeof(buffer), 0);
 
-    if (bytes <= 0)
-    {
-		epoll_ctl(this->epollFd, EPOLL_CTL_DEL, fd, NULL);
-        this->clients.erase(fd);
-        close(fd);
-        return;
-    }
+	// NON BLOCKING SI es tomado en cuenta !
+	if (bytes < 0)
+	{
+		if (errno == EAGAIN || errno == EWOULDBLOCK)
+			return;
+		this->closeConnection(fd);
+		return;
+	}
+	if (bytes == 0)
+	{
+		this->closeConnection(fd);
+		return;
+	}
+
+	// NON BLOCKING NO es tomado en cuenta !
+    //if (bytes <= 0)
+    //{
+	//	epoll_ctl(this->epollFd, EPOLL_CTL_DEL, fd, NULL);
+    //    this->clients.erase(fd);
+    //    close(fd);
+    //    return;
+    //}
 	
- 	// 1. Client detected or error
+ 	// Client detected or error
 	ClientState &client = this->clients[fd];
-	std::cout << client.config.locations[1].path << std::endl;
 	client.readBuffer.append(buffer, bytes);
 	try{
 		if (client.request.parse(client.readBuffer))
 		{
 			// SI ENTRA AQUÍ, es que parseRequest devolvió 'true' (Petición completa)
-				
-			// 2. Aquí VA Routing (Rol 4)
 			Config* server = &this->clients[fd].config;
 			HttpResponse res = routeRequest(client.request, *server);
 			client.writeBuffer = res.toString();
@@ -345,16 +419,6 @@ void Webserv::handleClientData(int fd)
             epoll_ctl(this->epollFd, EPOLL_CTL_MOD, fd, &ev);
 
             client.readBuffer.clear(); // listo para próxima request
-
-			// 3. De momento, respuesta de prueba
-			//std::string response = 
-			//	"HTTP/1.1 200 OK\r\n"
-			//	"Content-Type: text/plain\r\n"
-			//	"Content-Length: 13\r\n"
-			//	"Connection: close\r\n"
-			//	"\r\n"
-			//	"Hello Webserv";
-			//client.writeBuffer = response;
         }
 	}
 	catch (std::exception &e){
@@ -364,7 +428,7 @@ void Webserv::handleClientData(int fd)
 		res.addHeader("Content-Type", "text/html");
 		client.writeBuffer = res.toString();
 
-		// 6. CAMBIO A MODO ESCRITURA (EPOLLOUT)
+		// CAMBIO A MODO ESCRITURA (EPOLLOUT)
 		epoll_event ev;
 		std::memset(&ev, 0, sizeof(ev));
 		ev.events = EPOLLOUT; 
@@ -375,7 +439,9 @@ void Webserv::handleClientData(int fd)
         client.readBuffer.clear();
     }
 }
-
+/*
+ * ...
+ * */
 void Webserv::handleClientWrite(int fd)
 {
     ClientState &client = this->clients[fd];
@@ -390,6 +456,9 @@ void Webserv::handleClientWrite(int fd)
         client.writeBuffer.erase(0, bytesSent);
 	else if (bytesSent < 0)
     {
+		// En non-blocking, si send() devuelve -1 y errno == EAGAIN o EWOULDBLOCK, NO hay que cerrar
+		if (errno == EAGAIN || errno == EWOULDBLOCK)
+        	return ;
         std::cerr << RED << " [ERROR] Send failed on FD " << fd 
                   << ": " << strerror(errno) << RESET << std::endl;
         this->closeConnection(fd);
@@ -414,15 +483,6 @@ void Webserv::handleClientWrite(int fd)
  *     -> If that fd is a listening socket, accepts new client connections on sockets
  *     -> Otherwise, client request is processed
  *  - Handles client activity on connected sockets
- * 
- *- 📌DONE:📌
- * 	- poll(fds, ...)
- *	- handle events:
- *		   1) listening fd -> accept() new client -> add client fd to poll
- *		   2) client fd POLLIN -> read request data -> parse HttpRequest
- *		      -> when request complete: run routing pipeline (calls matchLocation + resolvePath)
- *		   3) client fd POLLOUT -> send pending response bytes
- *  - Send responses back to clients
  */
 void Webserv::run()
 {

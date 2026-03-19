@@ -19,11 +19,10 @@ SRC =  src/main.cpp \
 		src/matchLocation.cpp \
 		src/pathResolver.cpp \
 		src/httpResponse.cpp \
+		src/httpRequest.cpp \
 		src/cgiHandler.cpp \
 		src/utils.cpp \
 		src/debug.cpp \
-		src/HttpParser.cpp \
-		src/httpRequest.cpp \
 
 OBJ = $(SRC:%.cpp=build/%.o)
 

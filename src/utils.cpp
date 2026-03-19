@@ -3,10 +3,10 @@
 /*                                                        :::      ::::::::   */
 /*   utils.cpp                                          :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: kpineda- <kpineda-@student.42madrid.com    +#+  +:+       +#+        */
+/*   By: usuario <usuario@student.42.fr>            +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/01/21 00:44:52 by usuario           #+#    #+#             */
-/*   Updated: 2026/03/08 13:14:20 by kpineda-         ###   ########.fr       */
+/*   Updated: 2026/03/19 19:11:36 by usuario          ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -46,4 +46,22 @@ std::vector<char*> vecToCharPtr(std::vector<std::string>& src)
 		out.push_back(const_cast<char*>(src[i].c_str()));
 	out.push_back(NULL);
 	return (out);
+}
+
+std::string getExtension(const std::string& path)
+{
+    size_t dot = path.find_last_of('.');
+    if (dot == std::string::npos)
+        return "";
+    return path.substr(dot);
+}
+
+bool isCgiRequest(const Location& loc, const std::string& fsPath)
+{
+    std::string ext = getExtension(fsPath);
+    if (ext.empty())
+        return false;
+
+    std::map<std::string, std::string>::const_iterator it = loc.cgi_needs.find(ext);
+    return (it != loc.cgi_needs.end());
 }

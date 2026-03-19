@@ -3,16 +3,24 @@
 /*                                                        :::      ::::::::   */
 /*   httpResponse.cpp                                   :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: root <root@student.42.fr>                  +#+  +:+       +#+        */
+/*   By: usuario <usuario@student.42.fr>            +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/02/20 13:48:49 by kpineda-          #+#    #+#             */
-/*   Updated: 2026/03/14 22:47:14 by root             ###   ########.fr       */
+/*   Updated: 2026/03/19 20:17:02 by usuario          ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
 #include "httpResponse.hpp"
-#include <iostream>
+#include "pathResolver.hpp"
 #include "colors.hpp"
+
+#include <iostream>
+#include <fstream>
+#include <sstream>
+#include <ctime>
+#include <dirent.h>
+#include <sys/stat.h>
+#include <unistd.h>
 
 // Static member definitions
 std::map<int, std::string> HttpResponse::statusMessages;
@@ -34,8 +42,12 @@ void HttpResponse::initializeStatusMessages()
 		return;
 	statusMessages[200] = "OK";
 	statusMessages[201] = "Created";
-	statusMessages[404] = "Not Found";
+	statusMessages[204] = "No Content";
+	statusMessages[301] = "Moved Permanently";
+	statusMessages[302] = "Found";
+	statusMessages[400] = "Bad Request";	
 	statusMessages[403] = "Forbidden";
+	statusMessages[404] = "Not Found";
 	statusMessages[405] = "Method Not Allowed";
 	statusMessages[413] = "Payload Too Large";
 	statusMessages[500] = "Internal Server Error";
@@ -43,7 +55,7 @@ void HttpResponse::initializeStatusMessages()
 
 void HttpResponse::initializeMimeTypes()
 {
-	if ( !mimeTypes.empty() )
+	if ( !mimeTypes.empty())
 		return;
 	mimeTypes["html"] = "text/html";
 	mimeTypes["htm"] = "text/html";
@@ -59,6 +71,11 @@ void HttpResponse::initializeMimeTypes()
 void HttpResponse::setStatusCode(int code)
 {
 	statusCode = code;
+}
+
+int HttpResponse::getStatusCode() const
+{
+	return (statusCode);
 }
 
 void HttpResponse::addHeader(const std::string& key, const std::string& value)
@@ -137,7 +154,17 @@ void HttpResponse::loadFile(const std::string& path)
 		addHeader("Content-Type", "text/html");
 		return;
 	}
+
+	if (!S_ISREG(path_stat.st_mode))
+	{
+		setStatusCode(403);
+		setBody("<html><body><h1>403 Forbidden</h1></body></html>");
+		addHeader("Content-Type", "text/html");
+		return ;	
+	}
+	//NO NEED IF WE USE PATH RESOLVER
 	// Is it a directory?
+	/*
 	if (S_ISDIR(path_stat.st_mode))
 	{
 		std::string index = path + "/index.html";
@@ -149,48 +176,48 @@ void HttpResponse::loadFile(const std::string& path)
 		addHeader("Content-Type", "text/html");
 		return;
 	}
+	*/
 	// It's a regular file, try to read it
-	if (S_ISREG(path_stat.st_mode))
+	std::ifstream file(path.c_str(), std::ios::in | std::ios::binary);
+	if (file.is_open())
 	{
-		std::ifstream file(path.c_str(), std::ios::in | std::ios::binary);
-		if (file.is_open())
-		{
-			// 1. Read file content into body
-			std::stringstream ss;
-			ss << file.rdbuf();
-			setBody(ss.str());
+		// 1. Read file content into body
+		std::stringstream ss;
+		ss << file.rdbuf();
+		setBody(ss.str());
 			
-			// 2. Find file extension
-			size_t dot_pos = path.find_last_of(".");
-			if (dot_pos != std::string::npos)
-			{
-				// Extract extension
-				std::string ext = path.substr(dot_pos + 1);
-
-				// Convert to lowercase for case-insensitive matching
-				std::string lowerExt = toLower(ext);
-				
-				// Search for MIME type based on extension
-				if (mimeTypes.count(lowerExt))
-					addHeader("Content-Type", mimeTypes[lowerExt]);
-				else
-					addHeader("Content-Type", "application/octet-stream");
-			}
-			setStatusCode(200);
-			file.close();
-		}
-		else
+		// 2. Find file extension
+		size_t dot_pos = path.find_last_of(".");
+		if (dot_pos != std::string::npos)
 		{
-			// File exists but can't be opened (permissions issue)
-			setStatusCode (403);
-			setBody("<html><body><h1>403 Forbidden</h1><p>You don't have permission to access this resource.</p></body></html>");
-			addHeader("Content-Type", "text/html");
+			// Extract extension
+			std::string ext = path.substr(dot_pos + 1);
+
+			// Convert to lowercase for case-insensitive matching
+			std::string lowerExt = toLower(ext);
+			
+			// Search for MIME type based on extension
+			if (mimeTypes.count(lowerExt))
+				addHeader("Content-Type", mimeTypes[lowerExt]);
+			else
+				addHeader("Content-Type", "application/octet-stream");
 		}
+		setStatusCode(200);
+		file.close();
+	}
+	else
+	{
+		// File exists but can't be opened (permissions issue)
+		setStatusCode (403);
+		setBody("<html><body><h1>403 Forbidden</h1><p>You don't have permission to access this resource.</p></body></html>");
+		addHeader("Content-Type", "text/html");
 	}
 }
 
 void HttpResponse::handleGet(const std::string& url, const Location& loc)
 {
+	//-----MOVED TO ROUTE
+	/*
 	bool allowed = false;
 	for (size_t i = 0; i < loc.allow_methods.size(); ++i)
 	{
@@ -208,13 +235,45 @@ void HttpResponse::handleGet(const std::string& url, const Location& loc)
 		addHeader("Content-Type", "text/html");
 		return;
 	}
+	*/
 
-	std::string fullPath = loc.root + url;
-	loadFile(fullPath);
+	//----- Assumes rout is always loc.rooth + url
+	//std::string fullPath = loc.root + url;
+	//loadFile(fullPath);
+	//----- Uses resolvedPath 
+	ResolvedPath resolved = resolvePath(loc, loc.path + url);
+	struct stat s;
+    if (stat(resolved.fsPath.c_str(), &s) != 0)
+    {
+        setStatusCode(404);
+        setBody("<html><body><h1>404 Not Found</h1></body></html>");
+        addHeader("Content-Type", "text/html");
+        return ;
+    }
+
+    if (S_ISDIR(s.st_mode))
+    {
+        if (loc.autoindex)
+        {
+            setStatusCode(200);
+            setBody(generateAutoIndex(resolved.fsPath));
+            addHeader("Content-Type", "text/html");
+            return;
+        }
+
+        setStatusCode(403);
+        setBody("<html><body><h1>403 Forbidden</h1></body></html>");
+        addHeader("Content-Type", "text/html");
+        return ;
+    }
+
+    loadFile(resolved.fsPath);
 }
 
 void HttpResponse::handleDelete(const std::string& url, const Location& loc)
 {
+	//-----MOVED TO ROUTE
+	/*
 	bool allowed = false;
 	for (size_t i = 0; i < loc.allow_methods.size(); ++i)
 	{
@@ -232,7 +291,9 @@ void HttpResponse::handleDelete(const std::string& url, const Location& loc)
 		addHeader("Content-Type", "text/html");
 		return;
 	}
+	*/
 
+	/*----- Lorena's old Path resolver
 	std::string root = loc.root;
 	std::string path = url;
 
@@ -242,30 +303,39 @@ void HttpResponse::handleDelete(const std::string& url, const Location& loc)
 		root += "/";
 
 	std::string fullPath = root + path;
+	*/
 
+	//----- Uses resolvedPath 
+	ResolvedPath resolved = resolvePath(loc, loc.path + url);
+	std::string fullPath = resolved.fsPath;
+	//------
 	struct stat s;
 
 	if (stat(fullPath.c_str(), &s) != 0)
 	{
 		setStatusCode(404);
 		setBody("<html><body><h1>404 Not Found</h1><p>El archivo no existe.</p></body></html>");
+		addHeader("Content-Type", "text/html");
 		return;
 	}
 	else if (S_ISDIR(s.st_mode))
 	{
 		setStatusCode(403);
 		setBody("<html><body><h1>403 Forbidden</h1><p>No se pueden borrar directorios.</p></body></html>");
+		addHeader("Content-Type", "text/html");
 		return;
 	}
 	else if (unlink(fullPath.c_str()) == 0)
 	{
 		setStatusCode(200);
 		setBody("<html><body><h1>File Deleted</h1><p>El recurso ha sido eliminado.</p></body></html>");
+		addHeader("Content-Type", "text/html");
 	}
 	else
 	{
 		setStatusCode(500);
 		setBody("<html><body><h1>500 Internal Server Error</h1><p>No se pudo borrar el archivo.</p></body></html>");
+		addHeader("Content-Type", "text/html");	
 	}
 }
 
@@ -283,8 +353,11 @@ bool HttpResponse::savePostFile(const std::string& uploadPath, const std::string
 	return false;
 }
 
-void HttpResponse::handlePost(const std::string& body, const Location& loc, size_t maxSize)
+
+void HttpResponse::handlePost(const std::string& body, const Location& loc)
 {
+	//-----MOVED TO ROUTE
+	/*
 	bool allowed = false;
 	for (size_t i = 0; i < loc.allow_methods.size(); ++i)
 	{
@@ -294,7 +367,6 @@ void HttpResponse::handlePost(const std::string& body, const Location& loc, size
 			break;
 		}
 	}
-
 	if (!allowed)
 	{
 		setStatusCode(405);
@@ -302,7 +374,6 @@ void HttpResponse::handlePost(const std::string& body, const Location& loc, size
 		addHeader("Content-Type", "text/html");
 		return;
 	}
-	
 	if (body.length() > maxSize)
 	{
 		setStatusCode(413);
@@ -310,19 +381,14 @@ void HttpResponse::handlePost(const std::string& body, const Location& loc, size
 		addHeader("Content-Type", "text/html");
 		return;
 	}
-
+	*/
 	std::stringstream fileName;
 	fileName << "upload_" << time(0) << ".txt";
 	
 	std::string path = loc.upload_path.empty() ? "." : loc.upload_path;
-	std::string fullPath = path + "/" + fileName.str();
 	
-	std::ofstream outFile(fullPath.c_str(), std::ios::out | std::ios::binary);
-	if (outFile.is_open())
+	if (savePostFile(path, body, fileName.str()))
 	{
-		outFile << body;
-		outFile.close();
-		
 		setStatusCode(201);
 		setBody("<html><body><h1>201 Created</h1><p>File uploaded successfully.</p></body></html>");
 		addHeader("Content-Type", "text/html");

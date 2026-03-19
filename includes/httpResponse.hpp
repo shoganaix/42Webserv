@@ -3,10 +3,10 @@
 /*                                                        :::      ::::::::   */
 /*   httpResponse.hpp                                   :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: root <root@student.42.fr>                  +#+  +:+       +#+        */
+/*   By: usuario <usuario@student.42.fr>            +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/02/20 13:48:43 by kpineda-          #+#    #+#             */
-/*   Updated: 2026/03/03 23:15:52 by root             ###   ########.fr       */
+/*   Updated: 2026/03/19 19:33:43 by usuario          ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -62,8 +62,9 @@ public:
 	HttpResponse();
 	~HttpResponse();
 	
-	//setters and utility methods
+	//setters, getters and utility methods
 	void setStatusCode(int code);
+	int  getStatusCode() const;
 	void setBody(const std::string& body);
 	void addHeader(const std::string& key, const std::string& value);
 	void handleGet(const std::string& path);
@@ -80,7 +81,7 @@ public:
 	
 	// POST handling method
 	bool savePostFile(const std::string& uploadPath, const std::string& body, const std::string& filename);
-	void handlePost(const std::string& body, const Location& loc, size_t maxSize);
+	void handlePost(const std::string& body, const Location& loc);
 
 	void setRedirect(const std::string& location, int code);
 

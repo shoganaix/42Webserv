@@ -3,10 +3,10 @@
 /*                                                        :::      ::::::::   */
 /*   webserv.hpp                                        :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: root <root@student.42.fr>                  +#+  +:+       +#+        */
+/*   By: usuario <usuario@student.42.fr>            +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2025/12/10 20:21:23 by msoriano          #+#    #+#             */
-/*   Updated: 2026/03/03 23:16:22 by root             ###   ########.fr       */
+/*   Updated: 2026/03/19 17:54:56 by usuario          ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -16,7 +16,6 @@
 #include "colors.hpp"
 #include "httpRequest.hpp"
 #include "httpResponse.hpp"
-#include "HttpParser.hpp"
 
 #include <exception>
 

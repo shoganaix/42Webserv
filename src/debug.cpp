@@ -6,7 +6,7 @@
 /*   By: usuario <usuario@student.42.fr>            +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/02/11 20:53:33 by usuario           #+#    #+#             */
-/*   Updated: 2026/03/09 01:14:08 by usuario          ###   ########.fr       */
+/*   Updated: 2026/03/19 19:30:43 by usuario          ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -15,6 +15,7 @@
 #include "../includes/pathResolver.hpp"
 #include "../includes/webserv.hpp"
 #include "../includes/cgiHandler.hpp"
+#include "../includes/httpRequest.hpp"
 
 
 /*-----------------------------------------------------------------------
@@ -244,14 +245,19 @@ void debugTestCgiEnv(const Config& cfg)
         return;
 
     HttpRequest req;
-    req.method = "POST";
-    req.path = "/cgi-bin/time.py";
-    req.query = "name=maria&debug=1";
-    req.version = "HTTP/1.1";
-    req.body = "hello=world";
-    req.headers["Content-Type"] = "application/x-www-form-urlencoded";
-    req.headers["Host"] = "localhost:8080";
+    std::string raw =
+        "POST /cgi-bin/time.py?name=maria&debug=1 HTTP/1.1\r\n"
+        "Host: localhost:8080\r\n"
+        "Content-Type: application/x-www-form-urlencoded\r\n"
+        "Content-Length: 11\r\n"
+        "\r\n"
+        "hello=world";
 
+    if (!req.parse(raw))
+    {
+        std::cerr << "Failed to parse debug CGI request" << std::endl;
+        return ;
+    }
     std::map<std::string, std::string> env = CgiHandler::buildEnv(req, target, cfg.server_name, cfg.port, "127.0.0.1");
 
     std::cout << BLUE << "\n======= CGI ENV TEST =======\n" << RESET;
@@ -277,11 +283,16 @@ void debugTestCgiExecution(const Config& cfg)
         return;
 
     HttpRequest req;
-    req.method = "GET";
-    req.path = "/cgi-bin/time.py";
-    req.query = "";
-    req.version = "HTTP/1.1";
-    req.body = "";
+    std::string raw =
+        "GET /cgi-bin/time.py HTTP/1.1\r\n"
+        "Host: localhost:8080\r\n"
+        "\r\n";
+
+    if (!req.parse(raw))
+    {
+        std::cerr << "Failed to parse debug CGI request" << std::endl;
+        return ;
+    }
 
     CgiResult result = CgiHandler::execute(req, target, cfg.server_name, cfg.port,"127.0.0.1");
 
