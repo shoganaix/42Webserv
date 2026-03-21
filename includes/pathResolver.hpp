@@ -3,10 +3,10 @@
 /*                                                        :::      ::::::::   */
 /*   pathResolver.hpp                                   :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: usuario <usuario@student.42.fr>            +#+  +:+       +#+        */
+/*   By: kpineda- <kpineda-@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/02/16 12:51:20 by usuario           #+#    #+#             */
-/*   Updated: 2026/02/16 13:33:50 by usuario          ###   ########.fr       */
+/*   Updated: 2026/03/21 19:55:45 by kpineda-         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -23,5 +23,7 @@ struct ResolvedPath
 };
 
 ResolvedPath resolvePath(const Location& loc, const std::string& uriPath);
+ResolvedPath handleRoot(const Location& loc, const std::string& uriPath);
+
 
 #endif

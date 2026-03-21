@@ -3,10 +3,10 @@
 /*                                                        :::      ::::::::   */
 /*   httpResponse.cpp                                   :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: usuario <usuario@student.42.fr>            +#+  +:+       +#+        */
+/*   By: kpineda- <kpineda-@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/02/20 13:48:49 by kpineda-          #+#    #+#             */
-/*   Updated: 2026/03/19 20:17:02 by usuario          ###   ########.fr       */
+/*   Updated: 2026/03/21 21:37:31 by kpineda-         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -32,20 +32,20 @@ HttpResponse::HttpResponse() : version("HTTP/1.1"), statusCode(200), body("")
 	initializeMimeTypes();
 }
 
-HttpResponse::~HttpResponse() 
+HttpResponse::~HttpResponse()
 {
 }
 
 void HttpResponse::initializeStatusMessages()
 {
-	if ( !statusMessages.empty() )
+	if (!statusMessages.empty())
 		return;
 	statusMessages[200] = "OK";
 	statusMessages[201] = "Created";
 	statusMessages[204] = "No Content";
 	statusMessages[301] = "Moved Permanently";
 	statusMessages[302] = "Found";
-	statusMessages[400] = "Bad Request";	
+	statusMessages[400] = "Bad Request";
 	statusMessages[403] = "Forbidden";
 	statusMessages[404] = "Not Found";
 	statusMessages[405] = "Method Not Allowed";
@@ -55,7 +55,7 @@ void HttpResponse::initializeStatusMessages()
 
 void HttpResponse::initializeMimeTypes()
 {
-	if ( !mimeTypes.empty())
+	if (!mimeTypes.empty())
 		return;
 	mimeTypes["html"] = "text/html";
 	mimeTypes["htm"] = "text/html";
@@ -78,12 +78,12 @@ int HttpResponse::getStatusCode() const
 	return (statusCode);
 }
 
-void HttpResponse::addHeader(const std::string& key, const std::string& value)
+void HttpResponse::addHeader(const std::string &key, const std::string &value)
 {
 	headers[key] = value;
 }
 
-void HttpResponse::setBody(const std::string& body)
+void HttpResponse::setBody(const std::string &body)
 {
 	this->body = body;
 
@@ -107,10 +107,10 @@ std::string HttpResponse::toLower(std::string s)
 	return s;
 }
 
-std::string HttpResponse::generateAutoIndex(const std::string& path)
+std::string HttpResponse::generateAutoIndex(const std::string &path)
 {
-	DIR* dir;
-	struct dirent* entry;
+	DIR *dir;
+	struct dirent *entry;
 	std::stringstream html;
 
 	html << "<html><head><title>Index of " << path << "</title></head><body>";
@@ -121,15 +121,17 @@ std::string HttpResponse::generateAutoIndex(const std::string& path)
 		while ((entry = readdir(dir)) != NULL)
 		{
 			std::string name = entry->d_name;
-			if (name == ".") continue;
+			if (name == ".")
+				continue;
 
-			if (name[0] == '.' && name != "..") continue;
-			
+			if (name[0] == '.' && name != "..")
+				continue;
+
 			html << "<li><a href=\"" << name;
 
 			if (name == ".." || entry->d_type == DT_DIR)
-				html <<"/";
-				
+				html << "/";
+
 			html << "\">" << name << "</a></li>";
 		}
 		closedir(dir);
@@ -137,10 +139,10 @@ std::string HttpResponse::generateAutoIndex(const std::string& path)
 	else
 		return "<html><body><h1>Error al leer el directorio</h1></body></html>";
 	html << "</ul><hr></body></html>";
-	return html.str();	
+	return html.str();
 }
 
-void HttpResponse::loadFile(const std::string& path)
+void HttpResponse::loadFile(const std::string &path)
 {
 	struct stat path_stat;
 	std::cout << GREEN << path << RESET << std::endl;
@@ -160,10 +162,10 @@ void HttpResponse::loadFile(const std::string& path)
 		setStatusCode(403);
 		setBody("<html><body><h1>403 Forbidden</h1></body></html>");
 		addHeader("Content-Type", "text/html");
-		return ;	
+		return;
 	}
-	//NO NEED IF WE USE PATH RESOLVER
-	// Is it a directory?
+	// NO NEED IF WE USE PATH RESOLVER
+	//  Is it a directory?
 	/*
 	if (S_ISDIR(path_stat.st_mode))
 	{
@@ -185,17 +187,16 @@ void HttpResponse::loadFile(const std::string& path)
 		std::stringstream ss;
 		ss << file.rdbuf();
 		setBody(ss.str());
-			
+
 		// 2. Find file extension
 		size_t dot_pos = path.find_last_of(".");
 		if (dot_pos != std::string::npos)
 		{
 			// Extract extension
 			std::string ext = path.substr(dot_pos + 1);
-
 			// Convert to lowercase for case-insensitive matching
 			std::string lowerExt = toLower(ext);
-			
+
 			// Search for MIME type based on extension
 			if (mimeTypes.count(lowerExt))
 				addHeader("Content-Type", mimeTypes[lowerExt]);
@@ -208,13 +209,13 @@ void HttpResponse::loadFile(const std::string& path)
 	else
 	{
 		// File exists but can't be opened (permissions issue)
-		setStatusCode (403);
+		setStatusCode(403);
 		setBody("<html><body><h1>403 Forbidden</h1><p>You don't have permission to access this resource.</p></body></html>");
 		addHeader("Content-Type", "text/html");
 	}
 }
 
-void HttpResponse::handleGet(const std::string& url, const Location& loc)
+void HttpResponse::handleGet(const std::string &resolved, const Location &loc)
 {
 	//-----MOVED TO ROUTE
 	/*
@@ -227,7 +228,7 @@ void HttpResponse::handleGet(const std::string& url, const Location& loc)
 			break;
 		}
 	}
-	
+
 	if (!allowed)
 	{
 		setStatusCode(405);
@@ -238,40 +239,40 @@ void HttpResponse::handleGet(const std::string& url, const Location& loc)
 	*/
 
 	//----- Assumes rout is always loc.rooth + url
-	//std::string fullPath = loc.root + url;
-	//loadFile(fullPath);
-	//----- Uses resolvedPath 
-	ResolvedPath resolved = resolvePath(loc, loc.path + url);
+	// std::string fullPath = loc.root + url;
+	// loadFile(fullPath);
+	//----- Uses resolvedPath
 	struct stat s;
-    if (stat(resolved.fsPath.c_str(), &s) != 0)
-    {
-        setStatusCode(404);
-        setBody("<html><body><h1>404 Not Found</h1></body></html>");
-        addHeader("Content-Type", "text/html");
-        return ;
-    }
+	if (stat(resolved.c_str(), &s) != 0)
+	{
+		setStatusCode(404);
+		setBody("<html><body><h1>404 Not Found</h1></body></html>");
+		addHeader("Content-Type", "text/html");
+		return;
+	}
 
-    if (S_ISDIR(s.st_mode))
-    {
-        if (loc.autoindex)
-        {
-            setStatusCode(200);
-            setBody(generateAutoIndex(resolved.fsPath));
-            addHeader("Content-Type", "text/html");
-            return;
-        }
+	if (S_ISDIR(s.st_mode))
+	{
+		if (loc.autoindex)
+		{
+			setStatusCode(200);
+			setBody(generateAutoIndex(resolved));
+			addHeader("Content-Type", "text/html");
+			return;
+		}
 
-        setStatusCode(403);
-        setBody("<html><body><h1>403 Forbidden</h1></body></html>");
-        addHeader("Content-Type", "text/html");
-        return ;
-    }
+		setStatusCode(403);
+		setBody("<html><body><h1>403 Forbidden</h1></body></html>");
+		addHeader("Content-Type", "text/html");
+		return;
+	}
 
-    loadFile(resolved.fsPath);
+	loadFile(resolved);
 }
 
-void HttpResponse::handleDelete(const std::string& url, const Location& loc)
+void HttpResponse::handleDelete(const std::string &resolved, const Location &loc)
 {
+	(void)loc; // Avoid unused parameter warning
 	//-----MOVED TO ROUTE
 	/*
 	bool allowed = false;
@@ -283,7 +284,7 @@ void HttpResponse::handleDelete(const std::string& url, const Location& loc)
 			break;
 		}
 	}
-	
+
 	if (!allowed)
 	{
 		setStatusCode(405);
@@ -305,9 +306,8 @@ void HttpResponse::handleDelete(const std::string& url, const Location& loc)
 	std::string fullPath = root + path;
 	*/
 
-	//----- Uses resolvedPath 
-	ResolvedPath resolved = resolvePath(loc, loc.path + url);
-	std::string fullPath = resolved.fsPath;
+	//----- Uses resolvedPath
+	std::string fullPath = resolved;
 	//------
 	struct stat s;
 
@@ -335,14 +335,14 @@ void HttpResponse::handleDelete(const std::string& url, const Location& loc)
 	{
 		setStatusCode(500);
 		setBody("<html><body><h1>500 Internal Server Error</h1><p>No se pudo borrar el archivo.</p></body></html>");
-		addHeader("Content-Type", "text/html");	
+		addHeader("Content-Type", "text/html");
 	}
 }
 
-bool HttpResponse::savePostFile(const std::string& uploadPath, const std::string& body, const std::string& filename)
+bool HttpResponse::savePostFile(const std::string &uploadPath, const std::string &body, const std::string &filename)
 {
 	std::string fullPath = uploadPath + "/" + filename;
-	
+
 	std::ofstream file(fullPath.c_str(), std::ios::out | std::ios::binary);
 	if (file.is_open())
 	{
@@ -353,8 +353,7 @@ bool HttpResponse::savePostFile(const std::string& uploadPath, const std::string
 	return false;
 }
 
-
-void HttpResponse::handlePost(const std::string& body, const Location& loc)
+void HttpResponse::handlePost(const std::string &body, const Location &loc)
 {
 	//-----MOVED TO ROUTE
 	/*
@@ -384,9 +383,9 @@ void HttpResponse::handlePost(const std::string& body, const Location& loc)
 	*/
 	std::stringstream fileName;
 	fileName << "upload_" << time(0) << ".txt";
-	
+
 	std::string path = loc.upload_path.empty() ? "." : loc.upload_path;
-	
+
 	if (savePostFile(path, body, fileName.str()))
 	{
 		setStatusCode(201);
@@ -401,7 +400,7 @@ void HttpResponse::handlePost(const std::string& body, const Location& loc)
 	}
 }
 
-void HttpResponse::setRedirect(const std::string& location, int code)
+void HttpResponse::setRedirect(const std::string &location, int code)
 {
 	clear();
 	setStatusCode(code);
@@ -415,15 +414,16 @@ std::string HttpResponse::toString() const
 	std::stringstream response;
 
 	std::string msg = "Unknown Status";
-	
+
 	if (statusMessages.find(statusCode) != statusMessages.end())
 		msg = statusMessages.at(statusCode);
 
 	response << version << " " << statusCode << " " << msg << "\r\n";
-	
+
 	std::map<std::string, std::string>::const_iterator it;
 	for (it = headers.begin(); it != headers.end(); ++it)
 		response << it->first << ": " << it->second << "\r\n";
-	response << "\r\n" << body;
+	response << "\r\n"
+			 << body;
 	return response.str();
 }

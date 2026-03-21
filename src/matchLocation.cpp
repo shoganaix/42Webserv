@@ -3,10 +3,10 @@
 /*                                                        :::      ::::::::   */
 /*   matchLocation.cpp                                  :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: usuario <usuario@student.42.fr>            +#+  +:+       +#+        */
+/*   By: kpineda- <kpineda-@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/02/14 13:51:36 by msoriano          #+#    #+#             */
-/*   Updated: 2026/02/16 13:33:48 by usuario          ###   ########.fr       */
+/*   Updated: 2026/03/21 20:46:32 by kpineda-         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -35,14 +35,6 @@
  #include "../includes/matchLocation.hpp"
 
  /* 
- * Checks whether str >= prefix and contains with the specified prefix
- * If str starts with prefix- > returns TRUE, otherwise FALSE
- */
-static bool startsWith(const std::string &str, const std::string &prefix)
-{
-    return(str.size() >= prefix.size() && str.compare(0, prefix.size(),prefix) == 0);
-}
- /* 
  * - Checks if uriPath starts with localPath: startsWith()
  *   - Otherwise, FALSE
  * - If localPath is '/', matches everything -> returns TRUE
@@ -53,13 +45,21 @@ static bool startsWith(const std::string &str, const std::string &prefix)
  */
 static bool locationMatches(const std::string &uriPath, const std::string &localPath)
 {
-    if(!startsWith(uriPath,localPath))
-        return (false);
-    if(localPath == "/")
-        return (true);
-    if(uriPath.size() == localPath.size())
-        return (true);
-    return (uriPath[localPath.size()] ==  '/');
+    // Normaliza: quita barra final de localPath y uriPath si la tienen (excepto si son solo "/")
+    std::string norm_localPath = localPath;
+    std::string norm_uriPath = uriPath;
+	if (localPath == "/") return true; // root matches everything
+    if (norm_localPath.length() > 1 && norm_localPath[norm_localPath.length() - 1] == '/')
+        norm_localPath.erase(norm_localPath.length() - 1);
+    if (norm_uriPath.length() > 1 && norm_uriPath[norm_uriPath.length() - 1] == '/')
+        norm_uriPath.erase(norm_uriPath.length() - 1);
+    // Coincidencia exacta
+    if (norm_uriPath == norm_localPath)
+        return true;
+    // uriPath es subdirectorio o archivo dentro de localPath
+    if (norm_uriPath.size() > norm_localPath.size() && norm_uriPath.compare(0, norm_localPath.size(), norm_localPath) == 0 && norm_uriPath[norm_localPath.size()] == '/')
+        return true;
+    return false;
 }
 
  /* 
