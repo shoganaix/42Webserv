@@ -3,10 +3,10 @@
 /*                                                        :::      ::::::::   */
 /*   webserv.cpp                                        :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: kpineda- <kpineda-@student.42.fr>          +#+  +:+       +#+        */
+/*   By: usuario <usuario@student.42.fr>            +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/01/08 18:51:13 by angnavar          #+#    #+#             */
-/*   Updated: 2026/03/21 21:35:45 by kpineda-         ###   ########.fr       */
+/*   Updated: 2026/03/24 11:28:18 by usuario          ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -42,11 +42,11 @@
  * - Está prohibido ajustar el comportamiento mirando errno después de read o write.
  * - Si revisan errno tras read/recv/write/send, la evaluación es un 0 (revisar handleClientData() y handleClientWrite())
  *
- * Default file for directories ❌
+ * Default file for directories ✔
  * - El subject dice que en config debes poder definir el fichero por defecto cuando el recurso pedido es un directorio.
  * - En handleGet() si el target es directorio:
- *   autoindex está on, generas listing, si no, se devuelves 403
- *   PERO NO si ya hay autoindex, mostrar index por directorio
+ *   autoindex está on, generas listing, si no, se devuelves 404
+ *   PERO NO si ya hay autoindex, mostrar index por directorio (DONE)
 
 */
 
@@ -283,7 +283,6 @@ HttpResponse Webserv::routeRequest(const HttpRequest &req, const Config &server)
 	HttpResponse res;
 	// 1. Match location algorythm
 	const Location *loc = matchLocation(server, req.getPath());
-	std::cout << "location matched: " << (loc ? loc->path : "NULL") << std::endl;
 	// STEPS 2, 3 & 4: MOVED FROM HTTPRESPONSE
 	//   - Why? HttpResponse shouldnt be the one deciding if reqeust can or cannotr execute but only handle reponse after core decides
 
@@ -319,7 +318,7 @@ HttpResponse Webserv::routeRequest(const HttpRequest &req, const Config &server)
 		return (res);
 	}
 	// 4. Check allowed client_max_body_size
-	if (req.getBody().length() > server.client_max_body_size)
+	if (loc->client_max_body_size > 0 && req.getBody().length() > loc->client_max_body_size)
 	{
 		res.setStatusCode(413);
 		res.setBody("<html><body><h1>413 Payload Too Large</h1></body></html>");
@@ -357,7 +356,7 @@ HttpResponse Webserv::routeRequest(const HttpRequest &req, const Config &server)
 		relativePath = "/";
 
 	// 8. Dispatch method
-	if (req.getMethod() == "GET")
+	if (req.getMethod() == "GET" || req.getMethod() == "HEAD")
 		res.handleGet(relativePath, *loc);
 	else if (req.getMethod() == "POST")
 		res.handlePost(req.getBody(), *loc);
@@ -412,13 +411,12 @@ void Webserv::handleClientData(int fd)
 	{
 		if (client.request.parse(client.readBuffer))
 		{
-			std::cout << "Method: " << client.request.getMethod() << " Path: " << client.request.getPath() << RESET << std::endl;
-
 			// SI ENTRA AQUÍ, es que parseRequest devolvió 'true' (Petición completa)
 			Config *server = &this->clients[fd].config;
 			HttpResponse res = routeRequest(client.request, *server);
-			std::cout << "Response generated with status code: " << res.getStatusCode() << RESET << std::endl;
-			client.writeBuffer = res.toString();
+			client.writeBuffer = res.toString(client.request.getMethod() == "HEAD");
+			// if req.method = HEAD → omitBody = true
+			// otherwise            → omitBody = false
 			std::cout << "Respuesta: " << client.writeBuffer << " para FD " << fd << RESET << std::endl;
 
 			epoll_event ev;
@@ -437,7 +435,7 @@ void Webserv::handleClientData(int fd)
 		res.setStatusCode(400);
 		res.setBody("<html><body><h1>400 Bad Request</h1></body></html>");
 		res.addHeader("Content-Type", "text/html");
-		client.writeBuffer = res.toString();
+		client.writeBuffer = res.toString(client.request.getMethod() == "HEAD");
 
 		// CAMBIO A MODO ESCRITURA (EPOLLOUT)
 		epoll_event ev;

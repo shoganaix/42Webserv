@@ -6,7 +6,7 @@
 /*   By: usuario <usuario@student.42.fr>            +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/02/11 20:53:33 by usuario           #+#    #+#             */
-/*   Updated: 2026/03/19 19:30:43 by usuario          ###   ########.fr       */
+/*   Updated: 2026/03/24 11:26:00 by usuario          ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -42,6 +42,7 @@ static void printLocation(const Location &loc)
     std::cout << "      Root: " << (loc.root.empty() ? "(empty)" : loc.root) << std::endl;
     std::cout << "      Index: " << (loc.index.empty() ? "(empty)" : loc.index) << std::endl;
     std::cout << "      Autoindex: " << (loc.autoindex ? "on" : "off") << std::endl;
+    std::cout << "      Client max body size: " << loc.client_max_body_size << std::endl;
     std::cout << "      Redirection: " << (loc.redir.empty() ? "(none)" : loc.redir) << std::endl;
     std::cout << "      Upload path: " << (loc.upload_path.empty() ? "(none)" : loc.upload_path) << std::endl;
 

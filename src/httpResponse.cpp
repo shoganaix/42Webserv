@@ -3,10 +3,10 @@
 /*                                                        :::      ::::::::   */
 /*   httpResponse.cpp                                   :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: kpineda- <kpineda-@student.42.fr>          +#+  +:+       +#+        */
+/*   By: usuario <usuario@student.42.fr>            +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/02/20 13:48:49 by kpineda-          #+#    #+#             */
-/*   Updated: 2026/03/21 21:37:31 by kpineda-         ###   ########.fr       */
+/*   Updated: 2026/03/24 11:22:33 by usuario          ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -145,8 +145,6 @@ std::string HttpResponse::generateAutoIndex(const std::string &path)
 void HttpResponse::loadFile(const std::string &path)
 {
 	struct stat path_stat;
-	std::cout << GREEN << path << RESET << std::endl;
-
 	// Verify if the file exists and is a regular file
 	if (stat(path.c_str(), &path_stat) != 0)
 	{
@@ -253,6 +251,22 @@ void HttpResponse::handleGet(const std::string &resolved, const Location &loc)
 
 	if (S_ISDIR(s.st_mode))
 	{
+		// 1) intentar index dentro del directorio
+		if (!loc.index.empty())
+		{
+			std::string indexPath = resolved;
+			if (!indexPath.empty() && indexPath[indexPath.size() - 1] != '/')
+				indexPath += "/";
+			indexPath += loc.index;
+
+			struct stat indexStat;
+			if (stat(indexPath.c_str(), &indexStat) == 0 && S_ISREG(indexStat.st_mode))
+			{
+				loadFile(indexPath);
+				return;
+			}
+		}
+		// 2) si no hay index y autoindex está activado
 		if (loc.autoindex)
 		{
 			setStatusCode(200);
@@ -260,9 +274,9 @@ void HttpResponse::handleGet(const std::string &resolved, const Location &loc)
 			addHeader("Content-Type", "text/html");
 			return;
 		}
-
-		setStatusCode(403);
-		setBody("<html><body><h1>403 Forbidden</h1></body></html>");
+		// 3) si no hay index ni autoindex
+		setStatusCode(404);
+		setBody("<html><body><h1>404 Not Found</h1></body></html>");
 		addHeader("Content-Type", "text/html");
 		return;
 	}
@@ -409,7 +423,8 @@ void HttpResponse::setRedirect(const std::string &location, int code)
 	addHeader("Content-Type", "text/html");
 }
 
-std::string HttpResponse::toString() const
+//std::string HttpResponse::toString() const
+std::string HttpResponse::toString(bool omitBody) const
 {
 	std::stringstream response;
 
@@ -423,7 +438,11 @@ std::string HttpResponse::toString() const
 	std::map<std::string, std::string>::const_iterator it;
 	for (it = headers.begin(); it != headers.end(); ++it)
 		response << it->first << ": " << it->second << "\r\n";
-	response << "\r\n"
-			 << body;
+	response << "Connection: close\r\n";
+	response << "\r\n";
+	//so HEAD works
+	if (!omitBody)
+		response << body;
+		
 	return response.str();
 }

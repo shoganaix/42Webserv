@@ -3,10 +3,10 @@
 /*                                                        :::      ::::::::   */
 /*   httpResponse.hpp                                   :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: kpineda- <kpineda-@student.42.fr>          +#+  +:+       +#+        */
+/*   By: usuario <usuario@student.42.fr>            +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/02/20 13:48:43 by kpineda-          #+#    #+#             */
-/*   Updated: 2026/03/21 19:19:24 by kpineda-         ###   ########.fr       */
+/*   Updated: 2026/03/24 10:55:10 by usuario          ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -28,7 +28,7 @@ struct Location
 {
 	// In C++98, if you don't define a constructor, those fields can remain undefined
 	//  (Memory garbage → random errors)
-	Location() : autoindex(false), path("/"), root(""), alias(""), index(""), redir(""), upload_path("")
+	Location() : autoindex(false), path("/"), root(""), alias(""), index(""), redir(""), upload_path(""), client_max_body_size(0)
 	{
 	}
 
@@ -39,6 +39,7 @@ struct Location
 	std::string index;
 	std::string redir;
 	std::string upload_path;
+	size_t client_max_body_size;
 	std::vector<std::string> allow_methods;
 	std::map<std::string, std::string> cgi_needs;
 };
@@ -89,7 +90,9 @@ public:
 	void setRedirect(const std::string &location, int code);
 
 	// method to convert response to string format
-	std::string toString() const;
+	//std::string toString() const;
+	// new function also includes HEAD
+	std::string toString(bool omitBody = false) const;
 };
 
 #endif

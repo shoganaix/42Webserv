@@ -3,10 +3,10 @@
 /*                                                        :::      ::::::::   */
 /*   validation.cpp                                     :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: root <root@student.42.fr>                  +#+  +:+       +#+        */
+/*   By: usuario <usuario@student.42.fr>            +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/02/11 21:35:50 by usuario           #+#    #+#             */
-/*   Updated: 2026/03/03 21:05:32 by root             ###   ########.fr       */
+/*   Updated: 2026/03/24 10:30:18 by usuario          ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -35,7 +35,7 @@
 // *ADD METHODS* (GET, POST and DELETE mandatory)
 static bool isValidMethod(const std::string& m)
 {
-    return (m == "GET" || m == "POST" || m == "DELETE");
+    return (m == "GET" || m == "POST" || m == "DELETE" || m == "HEAD");
     /*return (m == "GET" || m == "POST" || m == "PUT" || m == "DELETE" ||
              m == "HEAD" || m == "OPTIONS" || m == "PATCH");  */
 }

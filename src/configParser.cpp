@@ -3,10 +3,10 @@
 /*                                                        :::      ::::::::   */
 /*   configParser.cpp                                   :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: kpineda- <kpineda-@student.42.fr>          +#+  +:+       +#+        */
+/*   By: usuario <usuario@student.42.fr>            +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/01/21 00:25:24 by usuario           #+#    #+#             */
-/*   Updated: 2026/03/21 20:10:57 by kpineda-         ###   ########.fr       */
+/*   Updated: 2026/03/24 11:22:01 by usuario          ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -173,7 +173,6 @@ void ConfigParser::parseLocation(Config &cfg)
 		}
 		else if (accept("alias"))
 		{
-			std::cout << "alias found: " << current().value << std::endl;
 			loc.alias = current().value;
 			pos++;
 			expect(";");
@@ -193,6 +192,12 @@ void ConfigParser::parseLocation(Config &cfg)
 		else if (accept("upload_path"))
 		{
 			loc.upload_path = current().value;
+			pos++;
+			expect(";");
+		}
+		else if (accept("client_max_body_size"))
+		{
+			loc.client_max_body_size = static_cast<size_t>(std::strtoul(current().value.c_str(), NULL, 10));
 			pos++;
 			expect(";");
 		}
@@ -275,6 +280,9 @@ static void normalizeServer(Config &cfg)
 
 		if (loc.index.empty())
 			loc.index = cfg.index;
+		
+		if (loc.client_max_body_size == 0)
+			loc.client_max_body_size = cfg.client_max_body_size;
 
 		if (loc.allow_methods.empty())
 			loc.allow_methods.push_back("GET");

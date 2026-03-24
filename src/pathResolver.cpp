@@ -3,10 +3,10 @@
 /*                                                        :::      ::::::::   */
 /*   pathResolver.cpp                                   :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: kpineda- <kpineda-@student.42.fr>          +#+  +:+       +#+        */
+/*   By: usuario <usuario@student.42.fr>            +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/02/16 12:51:20 by usuario           #+#    #+#             */
-/*   Updated: 2026/03/21 21:01:30 by kpineda-         ###   ########.fr       */
+/*   Updated: 2026/03/24 11:14:06 by usuario          ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -110,43 +110,28 @@ static std::string computeRemainder(const std::string &locPath, const std::strin
  *        If user asks: "/tours/" -> ends with '/'-> is a directory -> attach file
  *        Server returns: "/root/tours/index.html"
  */
-ResolvedPath handleRoot(const Location &loc, const std::string &uriPath)
-{
-	ResolvedPath out;
-	out.appendIndex = false;
-
-	std::cout << YELLOW << "Resolving path for URI: " << uriPath << " with location path: " << loc.path << RESET << std::endl;
-
-	out.resPath = computeRemainder(loc.path, uriPath);
-
-	out.fsPath = joinPaths(loc.root, out.resPath);
-
-	return out;
-}
 
 ResolvedPath resolvePath(const Location &loc, const std::string &uriPath)
 {
 	ResolvedPath out;
+	out.appendIndex = false;
 
-	out = handleRoot(loc, uriPath);
-	std::cout << BLUE << "loc: " << loc.path << " alias: " << loc.alias << RESET << std::endl;
-	if (!loc.alias.empty()) // replace all with alias^
+	out.resPath = computeRemainder(loc.path, uriPath);
+
+	if (!loc.alias.empty())
+        out.fsPath = joinPaths(loc.alias, out.resPath);
+    else
 	{
-
-		out.fsPath = loc.alias;
-		if (endsWithSlash(out.fsPath))
-		{
-			out.fsPath = joinPaths(out.fsPath, loc.index);
-			out.appendIndex = true;
-		}
+        out.fsPath = joinPaths(loc.root, out.resPath);
 	}
-	else if (endsWithSlash(uriPath))
+	// If request is location, then search for index
+	// (/directory, /directory/ or URI ending on '/')
+	if (out.resPath.empty() || endsWithSlash(uriPath))
 	{
 		out.fsPath = joinPaths(out.fsPath, loc.index);
 		out.appendIndex = true;
 	}
-
+	//borrar
 	std::cout << GREEN << "Resolved filesystem path: " << out.fsPath << RESET << std::endl;
-
-	return out;
+    return (out);
 }
