@@ -3,10 +3,10 @@
 /*                                                        :::      ::::::::   */
 /*   cgiHandler.cpp                                     :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: usuario <usuario@student.42.fr>            +#+  +:+       +#+        */
+/*   By: kpineda- <kpineda-@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/03/02 18:05:15 by root              #+#    #+#             */
-/*   Updated: 2026/03/19 19:21:34 by usuario          ###   ########.fr       */
+/*   Updated: 2026/04/04 23:14:45 by kpineda-         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -332,7 +332,7 @@ HttpResponse CgiHandler::parseCgiOutput(const std::string& rawOutput)
 	}
 	response.setStatusCode(statusCode);
 	response.setBody(bodyPart);
-	if (response.toString().find("Content-Type:") == std::string::npos)
+	if (response.toString(false).find("Content-Type:") == std::string::npos)
 		response.addHeader("Content-Type", "text/html");
 	return (response);
 }
