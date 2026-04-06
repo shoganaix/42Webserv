@@ -3,10 +3,10 @@
 /*                                                        :::      ::::::::   */
 /*   webserv.cpp                                        :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: angnavar <angnavar@student.42madrid.com    +#+  +:+       +#+        */
+/*   By: usuario <usuario@student.42.fr>            +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/01/08 18:51:13 by angnavar          #+#    #+#             */
-/*   Updated: 2026/04/06 10:50:33 by angnavar         ###   ########.fr       */
+/*   Updated: 2026/04/06 13:43:35 by usuario          ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -91,6 +91,25 @@ Webserv::Webserv(const std::string &configFile)
 	// 1) Parse configuration
 	ConfigParser parser;
 	this->config = parser.parse(configFile);
+	
+	// -------------- DEBUG: ------------------
+	for (size_t i = 0; i < this->config.size(); ++i)
+	{
+		std::cerr << "[CONFIG] server " << i
+				<< " port=" << this->config[i].port
+				<< " root=" << this->config[i].root
+				<< std::endl;
+
+		for (size_t j = 0; j < this->config[i].locations.size(); ++j)
+		{
+			const Location &loc = this->config[i].locations[j];
+			std::cerr << "[CONFIG]   location=" << loc.path
+					<< " max_body=" << loc.client_max_body_size
+					<< std::endl;
+		}
+	}
+	// ----------------------------------------
+
 	// 2) Normalize + validate configuration
 	validateAllServers(this->config);
 }
@@ -281,6 +300,12 @@ void Webserv::acceptNewConnection(int listeningFd)
 HttpResponse Webserv::routeRequest(const HttpRequest &req, const Config &server)
 {
 	HttpResponse res;
+	// -------------- DEBUG: ------------------
+	std::cerr << "[ROUTE] method=" << req.getMethod()
+			  << " path=" << req.getPath()
+			  << " body_size=" << req.getBody().size()
+			  << std::endl;
+	// ----------------------------------------
 	// 1. Match location algorythm
 	const Location *loc = matchLocation(server, req.getPath());
 	// STEPS 2, 3 & 4: MOVED FROM HTTPRESPONSE
@@ -290,11 +315,22 @@ HttpResponse Webserv::routeRequest(const HttpRequest &req, const Config &server)
 	//	  	 redirection        → 302
 	if (!loc)
 	{
+		// -------------- DEBUG: ------------------
+		std::cerr << "[ROUTE] matched location path=" << loc->path
+				  << " client_max_body_size=" << loc->client_max_body_size
+				  << std::endl;
+		// ----------------------------------------
 		res.setStatusCode(404);
 		res.setBody("<html><body><h1>404 Not Found</h1></body></html>");
 		res.addHeader("Content-Type", "text/html");
 		return (res);
 	}
+	// -------------- DEBUG: ------------------
+	else
+	{
+		std::cerr << "[ROUTE] no matching location" << std::endl;
+	}
+	// ----------------------------------------
 	if (!loc->redir.empty())
 	{
 		res.setRedirect(loc->redir, 302);
@@ -312,25 +348,32 @@ HttpResponse Webserv::routeRequest(const HttpRequest &req, const Config &server)
 	}
 	if (!allowed)
 	{
+		// -------------- DEBUG: ------------------
+		std::cerr << "[ROUTE] returning 405" << std::endl;
+		// ----------------------------------------
 		res.setStatusCode(405);
 		res.setBody("<html><body><h1>405 Method Not Allowed</h1></body></html>");
 		res.addHeader("Content-Type", "text/html");
 		return (res);
 	}
+
 	// 4. Check allowed client_max_body_size
 	if (loc->client_max_body_size > 0 && req.getBody().length() > loc->client_max_body_size)
 	{
+		std::cerr << "[ROUTE] returning 413"
+				  << " limit=" << loc->client_max_body_size
+				  << " body=" << req.getBody().length()
+				  << std::endl;
 		res.setStatusCode(413);
 		res.setBody("<html><body><h1>413 Payload Too Large</h1></body></html>");
 		res.addHeader("Content-Type", "text/html");
-		std::cerr << "client_max_body_size: " << loc->client_max_body_size << std::endl;
-		std::cerr << "req.getBody().length() : " << req.getBody().length() << std::endl;
 		return (res);
 	}
+
 	// 5. Resolve real path (FILESYSTEM)
 	ResolvedPath resolved = resolvePath(*loc, req.getPath());
 
-	// 5. Calling CGIHandler if necessary
+	// 6. Calling CGIHandler if necessary
 	if (isCgiRequest(*loc, resolved.fsPath))
 	{
 		try
@@ -395,7 +438,6 @@ HttpResponse Webserv::routeRequest(const HttpRequest &req, const Config &server)
 			return (res);
 		}
 	}
-
 	// 7. Relative path for normal handlers
 	//   - Why? We want to keep the logic of “how to handle a GET/POST/DELETE request” inside HttpResponse but the logic of “what is the real path of the resource we are trying to access” should be outside of it and be decided by the core router
 
@@ -558,6 +600,129 @@ void Webserv::handleClientData(int fd)
              }
         }
 		#endif
+		// ------------------------------------------------------------
+		// EARLY REJECTION: TEST 200
+		// If headers are already received, check Content-Length
+		// and respond with 413 without waiting for the full body
+		// ------------------------------------------------------------
+		size_t headersEnd = client.readBuffer.find("\r\n\r\n");
+		if (headersEnd != std::string::npos)
+		{
+			// Extract only the header section from the buffer
+			std::string headerPart = client.readBuffer.substr(0, headersEnd);
+			std::istringstream stream(headerPart);
+			std::string line;
+
+			std::string method;
+			std::string path;
+			std::string version;
+			std::map<std::string, std::string> headers;
+
+			// Parse the request line (e.g., "POST /path HTTP/1.1")
+			if (std::getline(stream, line))
+			{
+				if (!line.empty() && line[line.size() - 1] == '\r')
+					line.erase(line.size() - 1);
+
+				std::istringstream iss(line);
+				iss >> method >> path >> version;
+
+				// Remove query string from the path (everything after '?')
+				size_t qpos = path.find('?');
+				if (qpos != std::string::npos)
+					path = path.substr(0, qpos);
+			}
+
+			// Parse all HTTP headers into a map
+			while (std::getline(stream, line))
+			{
+				if (!line.empty() && line[line.size() - 1] == '\r')
+					line.erase(line.size() - 1);
+
+				if (line.empty())
+					break;
+
+				size_t colon = line.find(':');
+				if (colon == std::string::npos)
+					continue;
+
+				std::string key = line.substr(0, colon);
+				std::string value = line.substr(colon + 1);
+
+				// Trim leading spaces/tabs from header value
+				while (!value.empty() && (value[0] == ' ' || value[0] == '\t'))
+					value.erase(0, 1);
+
+				// Normalize header key to lowercase for case-insensitive lookup
+				for (size_t i = 0; i < key.size(); ++i)
+					key[i] = std::tolower(static_cast<unsigned char>(key[i]));
+
+				headers[key] = value;
+			}
+
+			// If we have a valid path and a Content-Length header, validate it
+			if (!path.empty() && headers.count("content-length"))
+			{
+				// Match request path to server location configuration
+				const Location *loc = matchLocation(client.config, path);
+
+				// -------------- DEBUG: ------------------
+				std::cerr << "[EARLY] path=" << path
+				<< " content-length=" << headers["content-length"]
+				<< std::endl;
+				// ----------------------------------------
+				if (loc)
+				{
+					// -------------- DEBUG: ------------------
+					std::cerr << "[EARLY] matched location path=" << loc->path
+									<< " client_max_body_size=" << loc->client_max_body_size
+									<< std::endl;
+					// ----------------------------------------
+					char *endptr = NULL;
+
+					// Convert Content-Length header to numeric value
+					unsigned long declaredLen = std::strtoul(headers["content-length"].c_str(), &endptr, 10);
+
+					// Validate that Content-Length is a valid number
+					if (*headers["content-length"].c_str() == '\0' || (endptr && *endptr != '\0'))
+						throw std::runtime_error("Invalid Content-Length value");
+
+					// Check against configured maximum body size
+					if (loc->client_max_body_size > 0 &&
+						declaredLen > loc->client_max_body_size)
+					{
+						// -------------- DEBUG: ------------------
+						std::cerr << "[EARLY] returning 413"
+								<< " declaredLen=" << declaredLen
+								<< " limit=" << loc->client_max_body_size
+								<< std::endl;
+						// ----------------------------------------
+						// Build 413 Payload Too Large response
+						HttpResponse res;
+						res.setStatusCode(413);
+						res.setBody("<html><body><h1>413 Payload Too Large</h1></body></html>");
+						res.addHeader("Content-Type", "text/html");
+
+						// Prepare response for sending
+						client.writeBuffer = res.toString(false);
+						client.bytesSent = 0;
+
+						// Clear read buffer to stop processing request body
+						client.readBuffer.clear();
+
+						// Switch epoll to write mode to send the response immediately
+						epoll_event ev;
+						std::memset(&ev, 0, sizeof(ev));
+						ev.events = EPOLLOUT;
+						ev.data.fd = fd;
+						epoll_ctl(this->epollFd, EPOLL_CTL_MOD, fd, &ev);
+
+						return;
+					}
+				}
+			}
+		}
+		// ------------------------------------------------------------
         if (client.request.parse(client.readBuffer))
         {
 			#ifdef DEBUG
@@ -577,6 +742,9 @@ void Webserv::handleClientData(int fd)
 				#endif
                 return; 
             }
+			// -------------- DEBUG: ------------------
+			std::cerr << "[HANDLE] response status=" << res.getStatusCode() << std::endl;
+			// -----------------------------------------
             client.writeBuffer = res.toString(client.request.getMethod() == "HEAD");
 			client.bytesSent = 0;
             if (client.writeBuffer.size() < 500) // Solo imprimimos si no es el body de 100MB
@@ -601,14 +769,14 @@ void Webserv::handleClientData(int fd)
 		res.addHeader("Content-Type", "text/html");
 		client.writeBuffer = res.toString(client.request.getMethod() == "HEAD");
 
+		client.bytesSent = 0;
+        client.readBuffer.clear();
 		// CAMBIO A MODO ESCRITURA (EPOLLOUT)
 		epoll_event ev;
 		std::memset(&ev, 0, sizeof(ev));
 		ev.events = EPOLLOUT;
 		ev.data.fd = fd;
 		epoll_ctl(this->epollFd, EPOLL_CTL_MOD, fd, &ev);
-
-		client.readBuffer.clear();
 	}
 }
 /*
