@@ -3,10 +3,10 @@
 /*                                                        :::      ::::::::   */
 /*   pathResolver.cpp                                   :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: usuario <usuario@student.42.fr>            +#+  +:+       +#+        */
+/*   By: angnavar <angnavar@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/02/16 12:51:20 by usuario           #+#    #+#             */
-/*   Updated: 2026/03/24 11:14:06 by usuario          ###   ########.fr       */
+/*   Updated: 2026/04/06 10:24:52 by angnavar         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -131,7 +131,5 @@ ResolvedPath resolvePath(const Location &loc, const std::string &uriPath)
 		out.fsPath = joinPaths(out.fsPath, loc.index);
 		out.appendIndex = true;
 	}
-	//borrar
-	std::cout << GREEN << "Resolved filesystem path: " << out.fsPath << RESET << std::endl;
     return (out);
 }

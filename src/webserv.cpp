@@ -3,10 +3,10 @@
 /*                                                        :::      ::::::::   */
 /*   webserv.cpp                                        :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: kpineda- <kpineda-@student.42madrid.com    +#+  +:+       +#+        */
+/*   By: angnavar <angnavar@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/01/08 18:51:13 by angnavar          #+#    #+#             */
-/*   Updated: 2026/04/05 23:47:01 by kpineda-         ###   ########.fr       */
+/*   Updated: 2026/04/06 10:50:33 by angnavar         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -346,11 +346,11 @@ HttpResponse Webserv::routeRequest(const HttpRequest &req, const Config &server)
 			ctx->pid = result.pid;
 			ctx->inFd = result.inFd;
     		ctx->outFd = result.outFd;
-
+			#ifdef DEBUG
 			std::cout << "DEBUG: Cliente FD: " << req.getClientFd() 
 			<< " | Pipe In: " << result.inFd 
 			<< " | Pipe Out: " << result.outFd << std::endl;
-
+			#endif
 			// Mapeamos ambos FDs al mismo contexto
 			this->_cgiFds[result.inFd] = ctx;
 			this->_cgiFds[result.outFd] = ctx;
@@ -408,7 +408,7 @@ HttpResponse Webserv::routeRequest(const HttpRequest &req, const Config &server)
 	if (req.getMethod() == "GET" || req.getMethod() == "HEAD")
 		res.handleGet(relativePath, *loc);
 	else if (req.getMethod() == "POST")
-		res.handlePost(req.getBody(), *loc);
+		res.handlePost(resolved.fsPath, req.getBody(), *loc);
 	else if (req.getMethod() == "DELETE")
 		res.handleDelete(relativePath, *loc);
 	else
@@ -548,19 +548,22 @@ void Webserv::handleClientData(int fd)
 
     try
     {
+		#ifdef DEBUG // Log cada 10MB
         if (client.readBuffer.size() > 1000000 || client.request.getContentLength() > 1000000) {
              static size_t last_size = 0;
-             if (client.readBuffer.size() > last_size + 10485760) { // Log cada 10MB
+             if (client.readBuffer.size() > last_size + 10485760) { 
                  std::cout << BLUE << "[DEBUG] Recibiendo datos... Buffer actual: " 
                            << client.readBuffer.size() << " bytes" << RESET << std::endl;
                  last_size = client.readBuffer.size();
              }
         }
-
+		#endif
         if (client.request.parse(client.readBuffer))
         {
+			#ifdef DEBUG
             std::cout << GREEN << "[DEBUG] REQUEST COMPLETA. Método: " << client.request.getMethod() 
                       << " | Body size: " << client.request.getBody().size() << " bytes" << RESET << std::endl;
+			#endif
 
             Config *server = &this->clients[fd].config;
             
@@ -569,17 +572,17 @@ void Webserv::handleClientData(int fd)
 
 			if (res.getIsCgi()) 
             {
+				#ifdef DEBUG
                 std::cout << PURPLE << "[DEBUG] Petición CGI detectada. Delegando a handleCgiEvent..." << RESET << std::endl;
+				#endif
                 return; 
             }
             client.writeBuffer = res.toString(client.request.getMethod() == "HEAD");
 			client.bytesSent = 0;
-            
             if (client.writeBuffer.size() < 500) // Solo imprimimos si no es el body de 100MB
                 std::cout << "Respuesta: " << client.writeBuffer << " para FD " << fd << RESET << std::endl;
             else
                 std::cout << "Respuesta grande generada (" << client.writeBuffer.size() << " bytes)" << std::endl;
-
             epoll_event ev;
             std::memset(&ev, 0, sizeof(ev));
             ev.events = EPOLLOUT;
@@ -619,10 +622,11 @@ void Webserv::handleClientWrite(int fd)
     ClientState &client = this->clients[fd];
 
     if (client.writeBuffer.empty() || client.bytesSent >= client.writeBuffer.size()) {
+		#ifdef DEBUG
         std::cout << YELLOW << "[DEBUG] Nada que enviar o índice corrupto en FD " << fd << RESET << std::endl;
+		#endif
         client.bytesSent = 0;
         client.writeBuffer.clear();
-        // Volvemos a modo lectura para no entrar en bucle de EPOLLOUT
         struct epoll_event ev;
         std::memset(&ev, 0, sizeof(ev));
         ev.events = EPOLLIN;
@@ -638,7 +642,9 @@ void Webserv::handleClientWrite(int fd)
 
     if (sent > 0) {
         client.bytesSent += sent;
+		#ifdef DEBUG
         std::cout << "[DEBUG] FD " << fd << " envió " << sent << " bytes." << std::endl;
+		#endif
     } else if (sent < 0) {
         if (errno == EAGAIN || errno == EWOULDBLOCK)
             return;

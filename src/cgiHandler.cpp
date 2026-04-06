@@ -3,10 +3,10 @@
 /*                                                        :::      ::::::::   */
 /*   cgiHandler.cpp                                     :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: kpineda- <kpineda-@student.42madrid.com    +#+  +:+       +#+        */
+/*   By: angnavar <angnavar@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/03/02 18:05:15 by root              #+#    #+#             */
-/*   Updated: 2026/04/05 22:57:43 by kpineda-         ###   ########.fr       */
+/*   Updated: 2026/04/06 10:21:39 by angnavar         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -211,10 +211,11 @@ CgiResult CgiHandler::execute(const HttpRequest& req, const CgiTarget& target, c
 			envS.push_back(it->first + "=" + it->second);
 
 		std::vector<char*> envp = vecToCharPtr(envS);
-
-		std::cout << "DEBUG: Intentando ejecutar: " << argv[0] << std::endl;
+		#ifdef DEBUG
+		std::cout << "[DEBUG] Intentando ejecutar: " << argv[0] << std::endl;
+		#endif
 		if (access(argv[0], X_OK) != 0) {
-			std::cerr << "[DEBUG] CGI ERROR: Binario no encontrado o sin permisos: " << argv[0] << std::endl;
+			std::cerr << "[ERROR] CGI: Binario no encontrado o sin permisos: " << argv[0] << std::endl;
 			exit(1);
 		}
 		execve(argv[0], &argv[0], &envp[0]);
@@ -287,12 +288,6 @@ std::string CgiHandler::toUpperHeaderName(const std::string& key)
  */
 HttpResponse CgiHandler::parseCgiOutput(const std::string& rawOutput)
 {
-	std::cout << "--- RAW START ---" << std::endl;
-    std::cout << "Total bytes: " << rawOutput.size() << std::endl;
-    // Imprime solo los primeros 100 caracteres para no saturar con el test de 100MB
-    std::cout << "Preview: " << rawOutput.substr(0, 100) << "..." << std::endl;
-    std::cout << "--- RAW END ---" << std::endl;
-	
     HttpResponse response;
     size_t sep = rawOutput.find("\r\n\r\n");
 	if (sep == std::string::npos)
@@ -308,7 +303,6 @@ HttpResponse CgiHandler::parseCgiOutput(const std::string& rawOutput)
 
     std::string headersPart = rawOutput.substr(0, sep);
     std::string bodyPart = rawOutput.substr(sep + 4);
-	std::cout << RED << "bodyPart: " << bodyPart << RESET <<std::endl;
     std::istringstream iss(headersPart);
     std::string line;
     int statusCode = 200;

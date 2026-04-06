@@ -3,10 +3,10 @@
 /*                                                        :::      ::::::::   */
 /*   httpResponse.hpp                                   :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: kpineda- <kpineda-@student.42madrid.com    +#+  +:+       +#+        */
+/*   By: angnavar <angnavar@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/02/20 13:48:43 by kpineda-          #+#    #+#             */
-/*   Updated: 2026/04/05 19:45:02 by kpineda-         ###   ########.fr       */
+/*   Updated: 2026/04/06 10:49:36 by angnavar         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -87,7 +87,8 @@ public:
 
 	// POST handling method
 	bool savePostFile(const std::string &uploadPath, const std::string &body, const std::string &filename);
-	void handlePost(const std::string &body, const Location &loc);
+	//void handlePost(const std::string &body, const Location &loc);
+	void handlePost(const std::string &resolved, const std::string &body, const Location &loc);
 
 	void setRedirect(const std::string &location, int code);
 

@@ -3,10 +3,10 @@
 /*                                                        :::      ::::::::   */
 /*   httpResponse.cpp                                   :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: kpineda- <kpineda-@student.42madrid.com    +#+  +:+       +#+        */
+/*   By: angnavar <angnavar@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/02/20 13:48:49 by kpineda-          #+#    #+#             */
-/*   Updated: 2026/04/05 14:25:04 by kpineda-         ###   ########.fr       */
+/*   Updated: 2026/04/06 10:51:58 by angnavar         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -366,11 +366,11 @@ bool HttpResponse::savePostFile(const std::string &uploadPath, const std::string
 	}
 	return false;
 }
-
+/*
 void HttpResponse::handlePost(const std::string &body, const Location &loc)
 {
 	//-----MOVED TO ROUTE
-	/*
+	//
 	bool allowed = false;
 	for (size_t i = 0; i < loc.allow_methods.size(); ++i)
 	{
@@ -394,7 +394,7 @@ void HttpResponse::handlePost(const std::string &body, const Location &loc)
 		addHeader("Content-Type", "text/html");
 		return;
 	}
-	*/
+	//
 	std::stringstream fileName;
 	fileName << "upload_" << time(0) << ".txt";
 
@@ -412,6 +412,39 @@ void HttpResponse::handlePost(const std::string &body, const Location &loc)
 		setBody("<html><body><h1>500 Internal Server Error</h1><p>Failed to save the uploaded file.</p></body></html>");
 		addHeader("Content-Type", "text/html");
 	}
+}
+*/
+
+void HttpResponse::handlePost(const std::string &resolved, const std::string &body, const Location &loc)
+{
+	(void)loc;
+
+	struct stat s;
+	bool existedBefore = (stat(resolved.c_str(), &s) == 0);
+
+	std::ofstream file(resolved.c_str(), std::ios::out | std::ios::binary);
+	if (!file.is_open())
+	{
+		setStatusCode(500);
+		setBody("<html><body><h1>500 Internal Server Error</h1><p>Failed to save file.</p></body></html>");
+		addHeader("Content-Type", "text/html");
+		return;
+	}
+
+	file.write(body.data(), body.size());
+	file.close();
+
+	if (!file)
+	{
+		setStatusCode(500);
+		setBody("<html><body><h1>500 Internal Server Error</h1><p>Write failed.</p></body></html>");
+		addHeader("Content-Type", "text/html");
+		return;
+	}
+
+	setStatusCode(existedBefore ? 200 : 201);
+	setBody("<html><body><h1>POST OK</h1></body></html>");
+	addHeader("Content-Type", "text/html");
 }
 
 void HttpResponse::setRedirect(const std::string &location, int code)
