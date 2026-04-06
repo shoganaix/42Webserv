@@ -3,10 +3,10 @@
 /*                                                        :::      ::::::::   */
 /*   httpRequest.hpp                                    :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: usuario <usuario@student.42.fr>            +#+  +:+       +#+        */
+/*   By: kpineda- <kpineda-@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/02/20 13:48:43 by kpineda-          #+#    #+#             */
-/*   Updated: 2026/03/19 19:27:03 by usuario          ###   ########.fr       */
+/*   Updated: 2026/04/05 14:15:58 by kpineda-         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -23,14 +23,26 @@ class HttpRequest
 {
 	public:
 		bool parse(const std::string& rawRequest);
-
+		void setClientFd(int fd) { _clientFd = fd; }
+		int getClientFd() const { return _clientFd; }
+		
 		const std::string& getMethod() const;
 		const std::string& getPath() const;
 		const std::string& getBody() const;
 		const std::string& getVersion() const;
 		const std::string& getQuery() const;
 		const std::map<std::string, std::string>& getHeaders() const;
+		size_t getContentLength() const
+		{
+			std::map<std::string, std::string>::const_iterator it = headers.find("Content-Length");
+			if (it != headers.end()) {
+				return std::atoll(it->second.c_str());
+			}
+			return 0;
+		}
+		
 	private:
+    	int _clientFd;
 		std::string method;
 		std::string path;
 		std::string body;

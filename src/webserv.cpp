@@ -3,10 +3,10 @@
 /*                                                        :::      ::::::::   */
 /*   webserv.cpp                                        :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: usuario <usuario@student.42.fr>            +#+  +:+       +#+        */
+/*   By: kpineda- <kpineda-@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/01/08 18:51:13 by angnavar          #+#    #+#             */
-/*   Updated: 2026/03/24 11:28:18 by usuario          ###   ########.fr       */
+/*   Updated: 2026/04/05 23:47:01 by kpineda-         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -323,6 +323,8 @@ HttpResponse Webserv::routeRequest(const HttpRequest &req, const Config &server)
 		res.setStatusCode(413);
 		res.setBody("<html><body><h1>413 Payload Too Large</h1></body></html>");
 		res.addHeader("Content-Type", "text/html");
+		std::cerr << "client_max_body_size: " << loc->client_max_body_size << std::endl;
+		std::cerr << "req.getBody().length() : " << req.getBody().length() << std::endl;
 		return (res);
 	}
 	// 5. Resolve real path (FILESYSTEM)
@@ -333,10 +335,57 @@ HttpResponse Webserv::routeRequest(const HttpRequest &req, const Config &server)
 	{
 		try
 		{
-			CgiHandler cgi;
-			CgiTarget target = cgi.detectCgi(*loc, resolved.fsPath);
-			CgiResult result = cgi.execute(req, target, server.server_name, server.port, "127.0.0.1");
-			return (cgi.parseCgiOutput(result.rawOutput));
+			CgiTarget target = _cgiHandler->detectCgi(*loc, resolved.fsPath);
+			CgiResult result = _cgiHandler->execute(req, target, server.server_name, server.port, "127.0.0.1");
+
+			// Creamos el contexto para que handleCgiEvent sepa qué hacer
+			CgiContext* ctx = new CgiContext();
+			ctx->clientFd = req.getClientFd(); // Asegúrate de haberlo seteado antes
+			ctx->bodyToWrite = req.getBody();
+			ctx->bytesWritten = 0;
+			ctx->pid = result.pid;
+			ctx->inFd = result.inFd;
+    		ctx->outFd = result.outFd;
+
+			std::cout << "DEBUG: Cliente FD: " << req.getClientFd() 
+			<< " | Pipe In: " << result.inFd 
+			<< " | Pipe Out: " << result.outFd << std::endl;
+
+			// Mapeamos ambos FDs al mismo contexto
+			this->_cgiFds[result.inFd] = ctx;
+			this->_cgiFds[result.outFd] = ctx;
+
+			if (req.getBody().empty()) {
+				// CLAVE: Si no hay body, cerramos el pipe de entrada YA.
+				// Esto envía un EOF al binario CGI y lo desbloquea.
+				epoll_ctl(this->epollFd, EPOLL_CTL_DEL, ctx->inFd, NULL);
+				close(ctx->inFd);
+				_cgiFds.erase(ctx->inFd);
+				ctx->inFd = -1; 
+			} else {
+				// Si hay body (POST 100MB), registramos para escribir
+				struct epoll_event evIn;
+				std::memset(&evIn, 0, sizeof(evIn));
+				evIn.events = EPOLLOUT;
+				evIn.data.fd = ctx->inFd;
+				epoll_ctl(this->epollFd, EPOLL_CTL_ADD, ctx->inFd, &evIn);
+			}
+
+			// Registramos en EPOLL
+			struct epoll_event ev;
+			std::memset(&ev, 0, sizeof(ev));
+			
+			ev.events = EPOLLOUT; // Para escribir el body al CGI
+			ev.data.fd = result.inFd;
+			epoll_ctl(this->epollFd, EPOLL_CTL_ADD, result.inFd, &ev);
+
+			ev.events = EPOLLIN;  // Para leer la respuesta del CGI
+			ev.data.fd = result.outFd;
+			epoll_ctl(this->epollFd, EPOLL_CTL_ADD, result.outFd, &ev);
+
+			// MARCAMOS LA RESPUESTA COMO CGI
+			res.setIsCgi(true); 
+			return (res);
 		}
 		catch (std::exception &e)
 		{
@@ -371,6 +420,105 @@ HttpResponse Webserv::routeRequest(const HttpRequest &req, const Config &server)
 	return (res);
 }
 
+void Webserv::finalizeCgiResponse( CgiContext* ctx, int fd)
+{
+    HttpResponse res = _cgiHandler->parseCgiOutput(ctx->rawResponse);
+    if (res.getStatusCode() < 100) res.setStatusCode(200);
+
+    if (this->clients.count(ctx->clientFd)) {
+        this->clients[ctx->clientFd].writeBuffer = res.toString(false);
+        this->clients[ctx->clientFd].bytesSent = 0;
+        
+        struct epoll_event ev;
+        std::memset(&ev, 0, sizeof(ev));
+        ev.events = EPOLLOUT;
+        ev.data.fd = ctx->clientFd;
+        epoll_ctl(this->epollFd, EPOLL_CTL_MOD, ctx->clientFd, &ev);
+    }
+
+    epoll_ctl(this->epollFd, EPOLL_CTL_DEL, fd, NULL);
+    _cgiFds.erase(fd);
+    close(fd);
+    waitpid(ctx->pid, NULL, WNOHANG);
+    delete ctx;
+}
+
+void Webserv::handleCgiEvent(int fd, uint32_t events)
+{
+    if (_cgiFds.find(fd) == _cgiFds.end())
+        return;
+
+    CgiContext* ctx = _cgiFds[fd];
+
+    // --- 1. ESCRITURA AL CGI (Hacia el inFd / Pipe 8) ---
+    if (fd == ctx->inFd && (events & EPOLLOUT))
+    {
+        if (ctx->bytesWritten < ctx->bodyToWrite.size())
+        {
+            ssize_t n = write(fd, ctx->bodyToWrite.data() + ctx->bytesWritten, 
+                              ctx->bodyToWrite.size() - ctx->bytesWritten);
+            if (n > 0) {
+                ctx->bytesWritten += n;
+            } else if (n < 0 && errno != EAGAIN && errno != EWOULDBLOCK) {
+                // AQUÍ PARAMOS LAS 'E': Si falla, sacamos el FD de epoll
+                epoll_ctl(this->epollFd, EPOLL_CTL_DEL, fd, NULL);
+                _cgiFds.erase(fd);
+                close(fd);
+                ctx->inFd = -1;
+                return; 
+            }
+        }
+        
+        // Cierre normal al terminar los 100MB
+        if (ctx->inFd != -1 && ctx->bytesWritten >= ctx->bodyToWrite.size())
+        {
+            epoll_ctl(this->epollFd, EPOLL_CTL_DEL, fd, NULL);
+            _cgiFds.erase(fd);
+            close(fd);
+            ctx->inFd = -1;
+            // No hacemos return para que pueda leer en esta misma vuelta
+        }
+    }
+
+    // --- 2. LECTURA DEL CGI (Desde el outFd / Pipe 9) ---
+    // IMPORTANTE: Un 'if' nuevo, no un 'else if'
+    if (_cgiFds.count(fd) && fd == ctx->outFd && (events & (EPOLLIN | EPOLLHUP | EPOLLERR))) 
+    {
+        char buffer[32768];
+        ssize_t n = read(fd, buffer, sizeof(buffer));
+
+        if (n > 0) {
+            ctx->rawResponse.append(buffer, n);
+        }
+        else if (n == 0 || (n < 0 && errno != EAGAIN && errno != EWOULDBLOCK))
+        {
+            // El CGI terminó: enviamos la respuesta acumulada al cliente
+            std::cout << GREEN << "[SUCCESS] CGI finalizado. Enviando respuesta..." << RESET << std::endl;
+            
+            // Aquí pones tu lógica de parsear y enviar (o llamar a tu finalizeCgiResponse)
+            HttpResponse res = _cgiHandler->parseCgiOutput(ctx->rawResponse);
+            if (res.getStatusCode() < 100) res.setStatusCode(200);
+
+            if (this->clients.count(ctx->clientFd)) {
+                this->clients[ctx->clientFd].writeBuffer = res.toString(false);
+                this->clients[ctx->clientFd].bytesSent = 0;
+                struct epoll_event ev = {};
+                ev.events = EPOLLOUT;
+                ev.data.fd = ctx->clientFd;
+                epoll_ctl(this->epollFd, EPOLL_CTL_MOD, ctx->clientFd, &ev);
+            }
+
+            // Limpieza final
+            epoll_ctl(this->epollFd, EPOLL_CTL_DEL, fd, NULL);
+            _cgiFds.erase(fd);
+            close(fd);
+            waitpid(ctx->pid, NULL, WNOHANG);
+            delete ctx; 
+        }
+    }
+}
+
+
 /*
  * Handles a client socket event:
  *  - Reads the HTTP request
@@ -378,56 +526,69 @@ HttpResponse Webserv::routeRequest(const HttpRequest &req, const Config &server)
  */
 void Webserv::handleClientData(int fd)
 {
-	char buffer[8192]; // 8192 -> 8 KB
-	ssize_t bytes = recv(fd, buffer, sizeof(buffer), 0);
+    char buffer[8192];
+    ssize_t bytes = recv(fd, buffer, sizeof(buffer), 0);
 
-	// NON BLOCKING SI es tomado en cuenta !
-	if (bytes < 0)
-	{
-		if (errno == EAGAIN || errno == EWOULDBLOCK)
-			return;
-		this->closeConnection(fd);
-		return;
-	}
-	if (bytes == 0)
-	{
-		this->closeConnection(fd);
-		return;
-	}
+    if (bytes < 0)
+    {
+        if (errno == EAGAIN || errno == EWOULDBLOCK)
+            return;
+        this->closeConnection(fd);
+        return;
+    }
+    if (bytes == 0)
+    {
+        this->closeConnection(fd);
+        return;
+    }
 
-	// NON BLOCKING NO es tomado en cuenta !
-	// if (bytes <= 0)
-	//{
-	//	epoll_ctl(this->epollFd, EPOLL_CTL_DEL, fd, NULL);
-	//    this->clients.erase(fd);
-	//    close(fd);
-	//    return;
-	//}
+    ClientState &client = this->clients[fd];
+	client.request.setClientFd(fd);
+    client.readBuffer.append(buffer, bytes);
 
-	// Client detected or error
-	ClientState &client = this->clients[fd];
-	client.readBuffer.append(buffer, bytes);
-	try
-	{
-		if (client.request.parse(client.readBuffer))
-		{
-			// SI ENTRA AQUÍ, es que parseRequest devolvió 'true' (Petición completa)
-			Config *server = &this->clients[fd].config;
-			HttpResponse res = routeRequest(client.request, *server);
-			client.writeBuffer = res.toString(client.request.getMethod() == "HEAD");
-			// if req.method = HEAD → omitBody = true
-			// otherwise            → omitBody = false
-			std::cout << "Respuesta: " << client.writeBuffer << " para FD " << fd << RESET << std::endl;
+    try
+    {
+        if (client.readBuffer.size() > 1000000 || client.request.getContentLength() > 1000000) {
+             static size_t last_size = 0;
+             if (client.readBuffer.size() > last_size + 10485760) { // Log cada 10MB
+                 std::cout << BLUE << "[DEBUG] Recibiendo datos... Buffer actual: " 
+                           << client.readBuffer.size() << " bytes" << RESET << std::endl;
+                 last_size = client.readBuffer.size();
+             }
+        }
 
-			epoll_event ev;
-			std::memset(&ev, 0, sizeof(ev));
-			ev.events = EPOLLOUT;
-			ev.data.fd = fd;
-			epoll_ctl(this->epollFd, EPOLL_CTL_MOD, fd, &ev);
+        if (client.request.parse(client.readBuffer))
+        {
+            std::cout << GREEN << "[DEBUG] REQUEST COMPLETA. Método: " << client.request.getMethod() 
+                      << " | Body size: " << client.request.getBody().size() << " bytes" << RESET << std::endl;
 
-			client.readBuffer.clear(); // listo para próxima request
-		}
-	}
+            Config *server = &this->clients[fd].config;
+            
+            // Aquí es donde el router decide si es CGI
+            HttpResponse res = routeRequest(client.request, *server);
+
+			if (res.getIsCgi()) 
+            {
+                std::cout << PURPLE << "[DEBUG] Petición CGI detectada. Delegando a handleCgiEvent..." << RESET << std::endl;
+                return; 
+            }
+            client.writeBuffer = res.toString(client.request.getMethod() == "HEAD");
+			client.bytesSent = 0;
+            
+            if (client.writeBuffer.size() < 500) // Solo imprimimos si no es el body de 100MB
+                std::cout << "Respuesta: " << client.writeBuffer << " para FD " << fd << RESET << std::endl;
+            else
+                std::cout << "Respuesta grande generada (" << client.writeBuffer.size() << " bytes)" << std::endl;
+
+            epoll_event ev;
+            std::memset(&ev, 0, sizeof(ev));
+            ev.events = EPOLLOUT;
+            ev.data.fd = fd;
+            epoll_ctl(this->epollFd, EPOLL_CTL_MOD, fd, &ev);
+
+            client.readBuffer.clear();
+        }
+    }
 	catch (std::exception &e)
 	{
 		std::cout << RED << "Error processing request on FD " << fd << ": " << e.what() << RESET << std::endl;
@@ -444,7 +605,6 @@ void Webserv::handleClientData(int fd)
 		ev.data.fd = fd;
 		epoll_ctl(this->epollFd, EPOLL_CTL_MOD, fd, &ev);
 
-		// Limpiamos el buffer de lectura para que esté listo para la siguiente petición
 		client.readBuffer.clear();
 	}
 }
@@ -453,32 +613,70 @@ void Webserv::handleClientData(int fd)
  * */
 void Webserv::handleClientWrite(int fd)
 {
-	ClientState &client = this->clients[fd];
+    if (this->clients.find(fd) == this->clients.end())
+        return;
 
-	if (client.writeBuffer.empty())
-		return;
+    ClientState &client = this->clients[fd];
 
-	// 5. Sends HTTP response through non-blocking socket I/O
-	ssize_t bytesSent = send(fd, client.writeBuffer.c_str(), client.writeBuffer.size(), 0);
+    if (client.writeBuffer.empty() || client.bytesSent >= client.writeBuffer.size()) {
+        std::cout << YELLOW << "[DEBUG] Nada que enviar o índice corrupto en FD " << fd << RESET << std::endl;
+        client.bytesSent = 0;
+        client.writeBuffer.clear();
+        // Volvemos a modo lectura para no entrar en bucle de EPOLLOUT
+        struct epoll_event ev;
+        std::memset(&ev, 0, sizeof(ev));
+        ev.events = EPOLLIN;
+        ev.data.fd = fd;
+        epoll_ctl(this->epollFd, EPOLL_CTL_MOD, fd, &ev);
+        return;
+    }
 
-	if (bytesSent > 0)
-		client.writeBuffer.erase(0, bytesSent);
-	else if (bytesSent < 0)
-	{
-		// En non-blocking, si send() devuelve -1 y errno == EAGAIN o EWOULDBLOCK, NO hay que cerrar
-		if (errno == EAGAIN || errno == EWOULDBLOCK)
-			return;
-		std::cerr << RED << " [ERROR] Send failed on FD " << fd
-				  << ": " << strerror(errno) << RESET << std::endl;
-		this->closeConnection(fd);
-	}
+    const char* ptr = client.writeBuffer.data() + client.bytesSent;
+    size_t remaining = client.writeBuffer.size() - client.bytesSent;
 
-	// 6. Closes connection
-	if (client.writeBuffer.empty())
-	{
-		std::cout << GREEN << " [SUCCESS] Response sent successfully to FD " << fd << RESET << std::endl;
-		this->closeConnection(fd);
-	}
+    ssize_t sent = send(fd, ptr, remaining, 0);
+
+    if (sent > 0) {
+        client.bytesSent += sent;
+        std::cout << "[DEBUG] FD " << fd << " envió " << sent << " bytes." << std::endl;
+    } else if (sent < 0) {
+        if (errno == EAGAIN || errno == EWOULDBLOCK)
+            return;
+        std::cerr << RED << " [ERROR] Send failed on FD " << fd << ": " << strerror(errno) << RESET << std::endl;
+        this->closeConnection(fd);
+        return;
+    }
+
+    // FINALIZACIÓN:
+    if (client.bytesSent >= client.writeBuffer.size()) {
+        std::cout << GREEN << "[SUCCESS] Respuesta enviada completa al FD " << fd << RESET << std::endl;
+        client.writeBuffer.clear();
+        client.bytesSent = 0;
+        
+        this->closeConnection(fd);
+    }
+}
+
+void Webserv::closeConnection(int fd)
+{
+    std::map<int, CgiContext*>::iterator it = _cgiFds.begin();
+    while (it != _cgiFds.end())
+    {
+        if (it->second->clientFd == fd)
+        {
+            int cgiFd = it->first;
+            kill(it->second->pid, SIGKILL);
+            epoll_ctl(this->epollFd, EPOLL_CTL_DEL, cgiFd, NULL);
+            close(cgiFd);
+            delete it->second;
+            _cgiFds.erase(it++);
+        }
+        else
+            ++it;
+    }
+    epoll_ctl(this->epollFd, EPOLL_CTL_DEL, fd, NULL);
+    this->clients.erase(fd);
+    close(fd);
 }
 
 /*
@@ -495,7 +693,9 @@ void Webserv::handleClientWrite(int fd)
 void Webserv::run()
 {
 	setSockets();
+	signal(SIGPIPE, SIG_IGN);
 
+	
 	std::cout << GREEN << "Webserv running..." << RESET << std::endl;
 
 	epoll_event epoll_events[100];
@@ -514,12 +714,16 @@ void Webserv::run()
 			int fd = epoll_events[i].data.fd;
 			if (isListeningFd(fd))
 				acceptNewConnection(fd);
+			else if (_cgiFds.count(fd))
+                handleCgiEvent(fd, epoll_events[i].events);
 			else
 			{
-				// Si el socket está listo para leer
+				if (epoll_events[i].events & (EPOLLHUP | EPOLLERR)) {
+					closeConnection(fd);
+					continue; 
+				}
 				if (epoll_events[i].events & EPOLLIN)
 					handleClientData(fd);
-				// Si el socket está listo para escribir
 				if (epoll_events[i].events & EPOLLOUT)
 					handleClientWrite(fd);
 			}
@@ -530,3 +734,5 @@ void Webserv::run()
 		}
 	}
 }
+
+

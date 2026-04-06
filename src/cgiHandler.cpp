@@ -6,7 +6,7 @@
 /*   By: kpineda- <kpineda-@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/03/02 18:05:15 by root              #+#    #+#             */
-/*   Updated: 2026/04/04 23:14:45 by kpineda-         ###   ########.fr       */
+/*   Updated: 2026/04/05 22:57:43 by kpineda-         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -122,6 +122,17 @@ std::map<std::string, std::string> CgiHandler::buildEnv(const HttpRequest& req, 
 			continue;
 		env[toUpperHeaderName(it->first)] = it->second;
 	}
+	char real_path[4096];
+    std::string absoluteFsPath;
+    if (realpath(target.scriptPath.c_str(), real_path))
+        absoluteFsPath = std::string(real_path);
+    else{
+        absoluteFsPath = target.scriptPath;}
+	env["SCRIPT_NAME"] = req.getPath();
+	env["PATH_INFO"] = req.getPath();
+	env["SCRIPT_FILENAME"] = absoluteFsPath; 
+	env["PATH_TRANSLATED"] = absoluteFsPath; 
+	env["REQUEST_URI"] = req.getPath();
 	return (env);
 }
 
@@ -166,6 +177,9 @@ CgiResult CgiHandler::execute(const HttpRequest& req, const CgiTarget& target, c
 		throw (std::runtime_error("pipe() failed for CGIHandler::execute stdout"));
 	}
 
+	fcntl(inPipe[1], F_SETFL, O_NONBLOCK);
+    fcntl(outPipe[0], F_SETFL, O_NONBLOCK);
+
 	pid_t pid = fork();
 	if (pid < 0)
 	{
@@ -197,40 +211,22 @@ CgiResult CgiHandler::execute(const HttpRequest& req, const CgiTarget& target, c
 			envS.push_back(it->first + "=" + it->second);
 
 		std::vector<char*> envp = vecToCharPtr(envS);
+
+		std::cout << "DEBUG: Intentando ejecutar: " << argv[0] << std::endl;
+		if (access(argv[0], X_OK) != 0) {
+			std::cerr << "[DEBUG] CGI ERROR: Binario no encontrado o sin permisos: " << argv[0] << std::endl;
+			exit(1);
+		}
 		execve(argv[0], &argv[0], &envp[0]);
 		_exit(127);
 	}
 	safeClose(inPipe[0]);
 	safeClose(outPipe[1]);
-	if (!req.getBody().empty())
-	{
-		size_t written = 0;
-		while (written < req.getBody().size())
-		{
-			ssize_t n = write(inPipe[1], req.getBody().data() + written, req.getBody().size() - written);
-			if (n < 0)
-				break;
-			written += static_cast<size_t>(n);
-		}
-	}
-	safeClose(inPipe[1]);
-	char buffer[4096]; // 4096 -> 4 KB
-	while (true)
-	{
-		ssize_t n = read(outPipe[0], buffer, sizeof(buffer));
-		if (n > 0)
-			result.rawOutput.append(buffer, n);
-		else
-			break;
-	}
-	safeClose(outPipe[0]);
-	int status = 0;
-	waitpid(pid, &status, 0);
-	if (WIFEXITED(status))
-		result.exitCode = WEXITSTATUS(status);
-	else
-		result.exitCode = 500;
-	return (result);
+
+    result.inFd = inPipe[1];
+    result.outFd = outPipe[0];
+    result.pid = pid;
+    return (result);
 }
 
 //---------------------------------------PARSING OUTPUT-------------------------------------------
@@ -291,48 +287,71 @@ std::string CgiHandler::toUpperHeaderName(const std::string& key)
  */
 HttpResponse CgiHandler::parseCgiOutput(const std::string& rawOutput)
 {
-	HttpResponse response;
-	size_t sep = rawOutput.find("\r\n\r\n");
-
+	std::cout << "--- RAW START ---" << std::endl;
+    std::cout << "Total bytes: " << rawOutput.size() << std::endl;
+    // Imprime solo los primeros 100 caracteres para no saturar con el test de 100MB
+    std::cout << "Preview: " << rawOutput.substr(0, 100) << "..." << std::endl;
+    std::cout << "--- RAW END ---" << std::endl;
+	
+    HttpResponse response;
+    size_t sep = rawOutput.find("\r\n\r\n");
 	if (sep == std::string::npos)
-	{
-		response.setStatusCode(200);
-		response.addHeader("Content-Type", "text/plain");
-		response.setBody(rawOutput);
-		return (response);
-	}
+		sep = rawOutput.find("\n\n");
+    if (sep == std::string::npos)
+    {
+        response.setStatusCode(200);
+        response.addHeader("Content-Type", "text/plain");
+        response.setBody(rawOutput);
+        response.addHeader("Content-Length", to_string(rawOutput.size()));
+        return (response);
+    }
 
-	std::string headersPart = rawOutput.substr(0, sep);
-	std::string bodyPart = rawOutput.substr(sep + 4);
-	std::istringstream iss(headersPart);
-	std::string line;
-	int statusCode = 200;
+    std::string headersPart = rawOutput.substr(0, sep);
+    std::string bodyPart = rawOutput.substr(sep + 4);
+	std::cout << RED << "bodyPart: " << bodyPart << RESET <<std::endl;
+    std::istringstream iss(headersPart);
+    std::string line;
+    int statusCode = 200;
+    bool hasContentType = false;
 
-	while (std::getline(iss, line))
-	{
-		if (!line.empty() && line[line.size() - 1] == '\r')
-			line.erase(line.size() - 1);
+    while (std::getline(iss, line))
+    {
+        if (!line.empty() && line[line.size() - 1] == '\r')
+            line.erase(line.size() - 1);
+        if (line.empty()) continue;
 
-		size_t colon = line.find(':');
-		if (colon == std::string::npos)
-			continue;
+        size_t colon = line.find(':');
+        if (colon == std::string::npos) continue;
 
-		std::string key = line.substr(0, colon);
-		std::string value = line.substr(colon + 1);
+        std::string key = line.substr(0, colon);
+        std::string value = line.substr(colon + 1);
 
-		while (!value.empty() && (value[0] == ' ' || value[0] == '\t'))
-			value.erase(0, 1);
-		if (key == "Status")
-		{
-			std::istringstream codeStream(value);
-			codeStream >> statusCode;
-		}
-		else
-			response.addHeader(key, value);
-	}
-	response.setStatusCode(statusCode);
-	response.setBody(bodyPart);
-	if (response.toString(false).find("Content-Type:") == std::string::npos)
-		response.addHeader("Content-Type", "text/html");
-	return (response);
+        // Trim de espacios
+        size_t first = value.find_first_not_of(" \t");
+        if (std::string::npos != first) {
+            size_t last = value.find_last_not_of(" \t");
+            value = value.substr(first, (last - first + 1));
+        }
+
+        if (key == "Status") {
+            std::istringstream codeStream(value);
+            codeStream >> statusCode;
+        } else {
+            if (key == "Content-Type") hasContentType = true;
+            response.addHeader(key, value);
+        }
+    }
+	if (statusCode < 100 || statusCode > 599)
+		statusCode = 200;
+    response.setStatusCode(statusCode);
+    response.setBody(bodyPart);
+
+    // 2. FORZAR CONTENT-LENGTH (Esto es lo que el tester mira con lupa)
+    // El tamaño debe ser exactamente el de bodyPart.size()
+    response.addHeader("Content-Length", to_string(bodyPart.size()));
+
+    if (!hasContentType)
+        response.addHeader("Content-Type", "text/html");
+
+    return (response);
 }

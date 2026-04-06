@@ -3,10 +3,10 @@
 /*                                                        :::      ::::::::   */
 /*   httpResponse.cpp                                   :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: usuario <usuario@student.42.fr>            +#+  +:+       +#+        */
+/*   By: kpineda- <kpineda-@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/02/20 13:48:49 by kpineda-          #+#    #+#             */
-/*   Updated: 2026/03/24 11:22:33 by usuario          ###   ########.fr       */
+/*   Updated: 2026/04/05 14:25:04 by kpineda-         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -26,7 +26,7 @@
 std::map<int, std::string> HttpResponse::statusMessages;
 std::map<std::string, std::string> HttpResponse::mimeTypes;
 
-HttpResponse::HttpResponse() : version("HTTP/1.1"), statusCode(200), body("")
+HttpResponse::HttpResponse() :_isCgi(false), version("HTTP/1.1"), statusCode(200), body("")
 {
 	initializeStatusMessages();
 	initializeMimeTypes();

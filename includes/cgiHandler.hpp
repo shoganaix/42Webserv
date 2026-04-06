@@ -3,10 +3,10 @@
 /*                                                        :::      ::::::::   */
 /*   cgiHandler.hpp                                     :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: usuario <usuario@student.42.fr>            +#+  +:+       +#+        */
+/*   By: kpineda- <kpineda-@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/03/02 18:57:01 by root              #+#    #+#             */
-/*   Updated: 2026/03/09 01:05:40 by usuario          ###   ########.fr       */
+/*   Updated: 2026/04/05 00:29:58 by kpineda-         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -25,10 +25,15 @@
  */
 struct CgiResult
 {
-	int         exitCode;
-	std::string rawOutput;
+    int         exitCode;
+    std::string rawOutput;
+    
+    int         inFd; 
+    int         outFd;
+    pid_t       pid;
+    bool        isFinished;
 
-	CgiResult() : exitCode(500), rawOutput() {}
+    CgiResult() : exitCode(500), rawOutput(""), inFd(-1), outFd(-1), pid(-1), isFinished(false) {}
 };
 
 /*

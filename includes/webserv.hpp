@@ -3,10 +3,10 @@
 /*                                                        :::      ::::::::   */
 /*   webserv.hpp                                        :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: usuario <usuario@student.42.fr>            +#+  +:+       +#+        */
+/*   By: kpineda- <kpineda-@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2025/12/10 20:21:23 by msoriano          #+#    #+#             */
-/*   Updated: 2026/03/19 17:54:56 by usuario          ###   ########.fr       */
+/*   Updated: 2026/04/05 23:33:11 by kpineda-         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -16,6 +16,7 @@
 #include "colors.hpp"
 #include "httpRequest.hpp"
 #include "httpResponse.hpp"
+
 
 #include <exception>
 
@@ -48,13 +49,26 @@
 #include <sys/types.h>   // basic data types for sockets
 #include <sys/epoll.h>   // epoll_create1(), epoll_ctl(), epoll_wait()
 
+class CgiHandler;
 
+struct CgiContext 
+{
+    int clientFd;        
+    int inFd;
+    int outFd;
+    std::string bodyToWrite;
+    size_t bytesWritten;
+    std::string rawResponse;
+    pid_t pid;
+
+    CgiContext() : clientFd(-1), inFd(-1), outFd(-1), bytesWritten(0), pid(-1) {}
+};
 
 struct Config
 {
     //In C++98, if you don't define a constructor, those fields can remain undefined
     Config()
-        : port(8080), max_size(0), client_max_body_size(1000000), host("0.0.0.0"),
+        : port(8080), max_size(0), client_max_body_size(100000000), host("0.0.0.0"),
         root(""), index("index.html"), server_name("")
         {}
 
@@ -77,6 +91,7 @@ struct ClientState
     std::string writeBuffer; // Lo que tenemos pendiente de enviar
     bool isRequestFinished;  // <-- Añade esto para saber cuándo parar de leer
     HttpRequest request;     // <-- Donde guardarás los datos parseados
+    size_t bytesSent;
     
     ClientState() : fd(-1), isRequestFinished(false) {}
 };
@@ -88,6 +103,8 @@ class Webserv
     std::vector<Config>		config;
 	std::map<int, Config>	fdToConfig; // Mapea socket_escucha -> Config
     std::map<int, ClientState> clients; // Centraliza los clientes
+    std::map<int, CgiContext*> _cgiFds;
+    CgiHandler* _cgiHandler;
 
 public:
     Webserv(const std::string &configFile);
@@ -98,14 +115,11 @@ private:
     void setSockets();
 	bool isListeningFd(int fd);
 	void acceptNewConnection(int fd);
+    void finalizeCgiResponse( CgiContext* ctx, int fd);
+    void handleCgiEvent(int fd, uint32_t events);
 	void handleClientData(int fd);
 	void handleClientWrite(int fd);
-    void closeConnection(int fd)
-    {
-        epoll_ctl(this->epollFd, EPOLL_CTL_DEL, fd, NULL);
-        this->clients.erase(fd);
-        close(fd);
-    }
+    void closeConnection(int fd);
     HttpResponse routeRequest(const HttpRequest &req, const Config &server);
 };
 

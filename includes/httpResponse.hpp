@@ -3,10 +3,10 @@
 /*                                                        :::      ::::::::   */
 /*   httpResponse.hpp                                   :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: usuario <usuario@student.42.fr>            +#+  +:+       +#+        */
+/*   By: kpineda- <kpineda-@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/02/20 13:48:43 by kpineda-          #+#    #+#             */
-/*   Updated: 2026/03/24 10:55:10 by usuario          ###   ########.fr       */
+/*   Updated: 2026/04/05 19:45:02 by kpineda-         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -31,7 +31,7 @@ struct Location
 	Location() : autoindex(false), path("/"), root(""), alias(""), index(""), redir(""), upload_path(""), client_max_body_size(0)
 	{
 	}
-
+	
 	bool autoindex;
 	std::string path;
 	std::string root;
@@ -47,6 +47,7 @@ struct Location
 class HttpResponse
 {
 	// Response components
+	bool _isCgi;
 	std::string version; // "HTTP/1.1"
 	int statusCode;		 // 200, 404, etc.
 	std::string body;
@@ -70,6 +71,7 @@ public:
 	void setStatusCode(int code);
 	int getStatusCode() const;
 	void setBody(const std::string &body);
+	const std::string &getBody() const { return body; }
 	void addHeader(const std::string &key, const std::string &value);
 	void handleGet(const std::string &path);
 	void clear();
@@ -93,6 +95,9 @@ public:
 	//std::string toString() const;
 	// new function also includes HEAD
 	std::string toString(bool omitBody = false) const;
+
+	void setIsCgi(bool value) { _isCgi = value; }
+    bool getIsCgi() const { return _isCgi; }
 };
 
 #endif
