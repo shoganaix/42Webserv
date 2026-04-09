@@ -14,7 +14,7 @@
  *                         🌪️CONFIG VALIDATION🌪️
  *
  * This module validates the correctness of the parsed config. Ensuring:
- * 
+ *
  *  - Ports are within valid range (1–65535)
  *  - Required fields (host, root, index) are not empty
  *  - HTTP methods are supported
@@ -27,10 +27,10 @@
  */
 
 #include "../includes/validation.hpp"
-#include "../includes/utils.hpp"        // intToString
-#include <stdexcept>                    // EXCEPTIONS AND RUNTIME (std::runtime_error)
-#include <set>                          // set (std::set<std::string> seen;)
-#include <cstdlib>                      // atoi/atol
+#include "../includes/utils.hpp" // intToString
+#include <stdexcept>             // EXCEPTIONS AND RUNTIME (std::runtime_error)
+#include <set>                   // set (std::set<std::string> seen;)
+#include <cstdlib>               // atoi/atol
 
 // *ADD METHODS* (GET, POST and DELETE mandatory)
 static bool isValidMethod(const std::string& m)
@@ -40,10 +40,7 @@ static bool isValidMethod(const std::string& m)
              m == "HEAD" || m == "OPTIONS" || m == "PATCH");  */
 }
 
-static bool isValidHttpErrorCode(int code)
-{
-    return (code >= 400 && code <= 599);
-}
+static bool isValidHttpErrorCode(int code) { return (code >= 400 && code <= 599); }
 
 /*
  * - Validates single location block inside server
@@ -52,25 +49,29 @@ static bool isValidHttpErrorCode(int code)
  * - Checks that all declared HTTP methods are supported
  * - Validates redirection format (must start with '/')
  * - Verifies CGI extensions and their paths (".sh" -> "/bin/bash")
- * - If any rule is violated -> throws std::runtime_error 
+ * - If any rule is violated -> throws std::runtime_error
  */
 static void validateLocation(const Location& loc, const Config& cfg)
 {
     if (loc.path.empty() || loc.path[0] != '/')
         throw std::runtime_error("Invalid location path: '" + loc.path + "' (must start with '/')");
     if (loc.root.empty())
-        throw std::runtime_error("Location '" + loc.path + "': root is empty (inheritance/normalization missing?)");
+        throw std::runtime_error("Location '" + loc.path +
+                                 "': root is empty (inheritance/normalization missing?)");
     if (loc.index.empty())
-        throw std::runtime_error("Location '" + loc.path + "': index is empty (inheritance/normalization missing?)");
+        throw std::runtime_error("Location '" + loc.path +
+                                 "': index is empty (inheritance/normalization missing?)");
 
     for (size_t i = 0; i < loc.allow_methods.size(); ++i)
     {
         if (!isValidMethod(loc.allow_methods[i]))
-            throw std::runtime_error("Location '" + loc.path + "': invalid method '" + loc.allow_methods[i] + "'");
+            throw std::runtime_error("Location '" + loc.path + "': invalid method '" +
+                                     loc.allow_methods[i] + "'");
     }
 
     if (!loc.redir.empty() && loc.redir[0] != '/')
-        throw std::runtime_error("Location '" + loc.path + "': invalid return/redirection '" + loc.redir + "' (must start with '/')");
+        throw std::runtime_error("Location '" + loc.path + "': invalid return/redirection '" +
+                                 loc.redir + "' (must start with '/')");
 
     for (std::map<std::string, std::string>::const_iterator it = loc.cgi_needs.begin();
          it != loc.cgi_needs.end(); ++it)
@@ -79,10 +80,12 @@ static void validateLocation(const Location& loc, const Config& cfg)
         const std::string& bin = it->second;
 
         if (ext.empty() || ext[0] != '.')
-            throw std::runtime_error("Location '" + loc.path + "': invalid CGI extension '" + ext + "' (must start with '.')");
+            throw std::runtime_error("Location '" + loc.path + "': invalid CGI extension '" + ext +
+                                     "' (must start with '.')");
 
         if (bin.empty())
-            throw std::runtime_error("Location '" + loc.path + "': CGI handler path is empty for extension '" + ext + "'");
+            throw std::runtime_error("Location '" + loc.path +
+                                     "': CGI handler path is empty for extension '" + ext + "'");
     }
 
     (void)cfg; // in case we want location/server cross checks
@@ -95,18 +98,19 @@ static void validateLocation(const Location& loc, const Config& cfg)
  * - Validates client_max_body_size is non-negative
  * - Verifies all error_page codes are valid
  * - Detects duplicated lines using SET
- *          - SET:  container which stores unique elements (Search, insert, and delete) 
+ *          - SET:  container which stores unique elements (Search, insert, and delete)
  * - Calls validateLocation() for each location block
  * - If validation fails -> throws std::runtime_error
  */
 void validateServer(const Config& cfg)
 {
     if (cfg.port < 1 || cfg.port > 65535)
-        throw std::runtime_error("Invalid listen port: " + intToString(cfg.port) + " (must be 1..65535)");
+        throw std::runtime_error("Invalid listen port: " + intToString(cfg.port) +
+                                 " (must be 1..65535)");
     if (cfg.host.empty())
         throw std::runtime_error("Host is empty");
-    //if (cfg.client_max_body_size == 0)
-        //throw std::runtime_error("client_max_body_size cannot be zero");
+    // if (cfg.client_max_body_size == 0)
+    // throw std::runtime_error("client_max_body_size cannot be zero");
     if (cfg.root.empty())
         throw std::runtime_error("Server root is empty");
     if (cfg.index.empty())
@@ -149,7 +153,8 @@ void validateAllServers(const std::vector<Config>& cfgs)
  * - If no methods are defined in location    -> returns true
  * - If the method is permitted               -> returns true
  * - If the method is not allowed             -> returns false
- *                                              (server should respond with "405. Method Not Allowed")
+ *                                              (server should respond with "405. Method Not
+Allowed")
 
 bool isMethodAllowed(const HttpRequest& req, const Location& loc)
 {
@@ -168,11 +173,12 @@ bool isMethodAllowed(const HttpRequest& req, const Location& loc)
 /*
  * - Validates that the size of the HTTP request body does not exceed
  *   (client_max_body_size)
- * 
+ *
  * - If no limit is defined (value = zero)     -> returns true
  * - If request body size is within the limit  -> returns true
  * - If the body exceeds the maximum size      -> returns false
- *                                              (server should respond with "413. Payload Too Large")
+ *                                              (server should respond with "413. Payload Too
+Large")
 
 bool isBodySizeValid(const HttpRequest& req, const Location& loc, const Config& cfg)
 {
@@ -200,5 +206,5 @@ int validateRequest(const HttpRequest& req, const Location& loc, const Config& c
     if (!isBodySizeValid(req, loc, cfg))
         return (413);
 
-    return (0); 
+    return (0);
 }*/

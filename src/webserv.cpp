@@ -6,7 +6,7 @@
 /*   By: macastro <macastro@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/01/08 18:51:13 by angnavar          #+#    #+#             */
-/*   Updated: 2026/04/09 21:07:15 by macastro         ###   ########.fr       */
+/*   Updated: 2026/04/09 21:45:10 by macastro         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -99,6 +99,7 @@ Webserv::Webserv(const std::string& configFile)
     this->config = parser.parse(configFile);
 
     // -------------- DEBUG: ------------------
+    // Print parsed configuration to verify correct parsing and normalization
     for (size_t i = 0; i < this->config.size(); ++i)
     {
         std::cerr << "[CONFIG] server " << i << " port=" << this->config[i].port
@@ -229,7 +230,7 @@ void Webserv::acceptNewConnection(int listeningFd)
         std::cerr << "Error in accept: " << strerror(errno) << std::endl;
         return;
     }
-    fcntl(clientFd, F_SETFL, O_NONBLOCK);
+    fcntl(clientFd, F_SETFL, O_NONBLOCK); // Set non-blocking mode
 
     ClientState newClient;
     newClient.fd = clientFd;
@@ -801,9 +802,15 @@ void Webserv::handleClientData(int fd)
         epoll_ctl(this->epollFd, EPOLL_CTL_MOD, fd, &ev);
     }
 }
-/*
- * ...
- * */
+
+/**
+ * Handles write events for a client socket:
+ *  - Checks if there is data to send in the client's write buffer
+ *  - Sends as much data as possible to the client
+ *  - If all data is sent, switches back to read mode (EPOLLIN)
+ *  - If an error occurs during send, closes the connection
+ *  - If the response was fully sent, closes the connection (no keep-alive)
+ */
 void Webserv::handleClientWrite(int fd)
 {
     if (this->clients.find(fd) == this->clients.end())

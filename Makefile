@@ -1,6 +1,6 @@
 # --------------COMMENTS-----------------
 # make → build normal
-# make debug → build debug 
+# make debug → build debug
 # ---------------------------------------
 
 NAME = webserv
@@ -41,7 +41,7 @@ $(NAME): $(OBJ)
 	@echo " _ _ _       _    ___                          "
 	@echo "| | | | ___ | |_ / __> ___  _ _  _ _  ___  _ _ "
 	@echo "| | | |/ ._>| .  \__ \/ ._>| '_>| | |/ ._>| '_>"
-	@echo "|__/_/ \___.|___/<___/\___.|_|  |__/ \___.|_|  "                                           
+	@echo "|__/_/ \___.|___/<___/\___.|_|  |__/ \___.|_|  "
 	@echo "$(RESET)"
 	@$(CPP) $(CPPFLAGS) $(OBJ) -o $(NAME)
 	@echo "$(GREEN)▄▀▄▀▄▀▄▀▄▀▄▀▄▀▄ Successfully Compiled! ▄▀▄▀▄▀▄▀▄▀▄▀▄▀▄$(RESET)"

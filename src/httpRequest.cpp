@@ -21,7 +21,7 @@ const std::string& HttpRequest::getVersion() const { return version; }
 const std::string& HttpRequest::getQuery() const { return query; }
 const std::map<std::string, std::string>& HttpRequest::getHeaders() const { return headers; }
 
- /* Parses HTTP request line and extracts method, path, query and version
+/* Parses HTTP request line and extracts method, path, query and version
  * 1. Creates a string stream for parsing space-separated tokens (obj fields)
  * 2. Extracts tokens from line: method, path:(ex: /index.html), version (eX., HTTP/1.1)
  * 3. Checks if path contains query (-> indicated by '?'):
@@ -34,7 +34,7 @@ void HttpRequest::parseRequestLine(const std::string& line)
 {
     std::istringstream iss(line);
     if (!(iss >> method >> path >> version))
-        throw (std::runtime_error("Request line must contain method, path, and HTTP version"));
+        throw(std::runtime_error("Request line must contain method, path, and HTTP version"));
     size_t pos = path.find('?');
     if (pos != std::string::npos)
     {
@@ -47,7 +47,7 @@ void HttpRequest::parseRequestLine(const std::string& line)
     }
 }
 
- /* Parses HTTP header line and stores it in 'headers' map (key + value)
+/* Parses HTTP header line and stores it in 'headers' map (key + value)
  * 1. Searches for ':' that divides header key and value
  * 2. If ':' is not found -> Exception (invalid header format)
  *    If it is            -> Extracts:
@@ -61,7 +61,7 @@ void HttpRequest::parseHeaderLine(const std::string& line)
 {
     size_t pos = line.find(':');
     if (pos == std::string::npos)
-        throw (std::runtime_error("Invalid header format"));
+        throw(std::runtime_error("Invalid header format"));
 
     std::string key = line.substr(0, pos);
     std::string value = line.substr(pos + 1);
@@ -74,7 +74,6 @@ void HttpRequest::parseHeaderLine(const std::string& line)
 
     headers[key] = value;
 }
-
 
 /*
  * Parses chunked HTTP body (Transfer-Encoding: chunked)
@@ -157,16 +156,16 @@ bool HttpRequest::parseBody(const std::string& raw, size_t bodyStart)
         if (te.find("chunked") != std::string::npos)
             return (parseChunkedBody(raw, bodyStart));
     }
-    
+
     size_t expectedBodyLen = 0;
 
     if (headers.count("content-length"))
     {
-        char *endptr = NULL;
+        char* endptr = NULL;
         unsigned long n = std::strtoul(headers["content-length"].c_str(), &endptr, 10);
 
         if (*headers["content-length"].c_str() == '\0' || (endptr && *endptr != '\0'))
-            throw (std::runtime_error("Invalid Content-Length value"));
+            throw(std::runtime_error("Invalid Content-Length value"));
 
         expectedBodyLen = static_cast<size_t>(n);
     }
@@ -187,7 +186,7 @@ bool HttpRequest::parseBody(const std::string& raw, size_t bodyStart)
  * 6. Parses and stores each header in the headers MAP
  * ! Throws EXCEPTION if: request empty,
  *                       request line invalid,
- *                       header line malformed 
+ *                       header line malformed
  */
 void HttpRequest::parseStartLineAndHeaders(const std::string& headerPart)
 {
@@ -195,7 +194,7 @@ void HttpRequest::parseStartLineAndHeaders(const std::string& headerPart)
     std::string line;
 
     if (!std::getline(stream, line))
-        throw (std::runtime_error("Empty HTTP request"));
+        throw(std::runtime_error("Empty HTTP request"));
 
     if (!line.empty() && line[line.size() - 1] == '\r')
         line.erase(line.size() - 1);
@@ -204,9 +203,9 @@ void HttpRequest::parseStartLineAndHeaders(const std::string& headerPart)
     {
         parseRequestLine(line);
     }
-    catch (std::exception &e)
+    catch (std::exception& e)
     {
-        throw (std::runtime_error("Invalid request line: " + std::string(e.what())));
+        throw(std::runtime_error("Invalid request line: " + std::string(e.what())));
     }
 
     while (std::getline(stream, line))
@@ -221,9 +220,9 @@ void HttpRequest::parseStartLineAndHeaders(const std::string& headerPart)
         {
             parseHeaderLine(line);
         }
-        catch (std::exception &e)
+        catch (std::exception& e)
         {
-            throw (std::runtime_error("Malformed header: " + std::string(e.what())));
+            throw(std::runtime_error("Malformed header: " + std::string(e.what())));
         }
     }
 }
@@ -237,7 +236,7 @@ void HttpRequest::parseStartLineAndHeaders(const std::string& headerPart)
  * 3. Calculates bodyStart (position + 4) & calls parseBody()
  * 4. Returns true ONLY when request has been successfully parsed
  */
-bool HttpRequest::parse(const std::string &raw)
+bool HttpRequest::parse(const std::string& raw)
 {
     method.clear();
     path.clear();

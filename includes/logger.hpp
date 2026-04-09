@@ -15,15 +15,22 @@
 
 #include <iostream>
 
-enum LogState { OFF = 0, ON = 1 };
-enum Output { CONSOLE_OUTPUT = 0 };
+enum LogState
+{
+    OFF = 0,
+    ON = 1
+};
+enum Output
+{
+    CONSOLE_OUTPUT = 0
+};
 
 class Logger
 {
-public:
+  public:
     static void setState(LogState state) { _state = state; }
 
-    static void logMsg(const std::string &color, Output dest, const std::string &msg)
+    static void logMsg(const std::string& color, Output dest, const std::string& msg)
     {
         if (_state == ON)
         {
@@ -32,7 +39,7 @@ public:
         }
     }
 
-private:
+  private:
     static LogState _state;
 };
 

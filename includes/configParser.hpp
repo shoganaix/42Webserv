@@ -15,28 +15,28 @@
 
 #include <iostream>
 #include <vector>
-#include <cstdlib>      //calling aoi/atol
+#include <cstdlib> //calling aoi/atol
 
 #include "webserv.hpp"
 #include "tokenizer.hpp"
 
-class ConfigParser 
+class ConfigParser
 {
-    public:
-        //using vector to prepare multiple config files
-        std::vector<Config> parse(const std::string& path);
+  public:
+    // using vector to prepare multiple config files
+    std::vector<Config> parse(const std::string& path);
 
-    private:
-        std::vector<Token> tokens;
-        size_t pos;
+  private:
+    std::vector<Token> tokens;
+    size_t pos;
 
-        Token& current();
-        bool accept(const std::string& v);
-        void expect(const std::string& v);
+    Token& current();
+    bool accept(const std::string& v);
+    void expect(const std::string& v);
 
-        void parseServer(Config& cfg);
-        void parseServerDirective(Config& cfg);
-        void parseLocation(Config& cfg);
+    void parseServer(Config& cfg);
+    void parseServerDirective(Config& cfg);
+    void parseLocation(Config& cfg);
 };
 
 #endif

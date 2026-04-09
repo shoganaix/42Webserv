@@ -35,11 +35,11 @@
  * Returns the current token pointed by the parser cursor
  * If parser tries to read beyond list = configuration ended unexpectedly = exception
  */
-Token &ConfigParser::current()
+Token& ConfigParser::current()
 {
-	if (pos >= tokens.size())
-		throw(std::runtime_error("Unexpected end of file"));
-	return (tokens[pos]);
+    if (pos >= tokens.size())
+        throw(std::runtime_error("Unexpected end of file"));
+    return (tokens[pos]);
 }
 
 /*
@@ -49,14 +49,14 @@ Token &ConfigParser::current()
  *
  *      ++++++++ Used for OPTIONAL or branching GRAMMAR RULES ++++++++
  */
-bool ConfigParser::accept(const std::string &v)
+bool ConfigParser::accept(const std::string& v)
 {
-	if (current().value == v)
-	{
-		pos++;
-		return (true);
-	}
-	return (false);
+    if (current().value == v)
+    {
+        pos++;
+        return (true);
+    }
+    return (false);
 }
 /*
  * Ensures that the current token matches the expected value = STRICT version of accept()
@@ -64,10 +64,10 @@ bool ConfigParser::accept(const std::string &v)
  *
  *    ++++++++ Used when the GRAMMAR REQUIRES a SPECIFIC token/rule ++++++++
  */
-void ConfigParser::expect(const std::string &v)
+void ConfigParser::expect(const std::string& v)
 {
-	if (!accept(v))
-		throw(std::runtime_error("Expected '" + v + "' at line " + intToString(current().line)));
+    if (!accept(v))
+        throw(std::runtime_error("Expected '" + v + "' at line " + intToString(current().line)));
 }
 
 /*
@@ -84,54 +84,55 @@ void ConfigParser::expect(const std::string &v)
  *
  * Unknown directive -> configuration error
  */
-void ConfigParser::parseServerDirective(Config &cfg)
+void ConfigParser::parseServerDirective(Config& cfg)
 {
-	if (accept("listen"))
-	{
-		cfg.port = std::atoi(current().value.c_str());
-		pos++;
-		expect(";");
-	}
-	else if (accept("host"))
-	{
-		cfg.host = current().value;
-		pos++;
-		expect(";");
-	}
-	else if (accept("root"))
-	{
-		cfg.root = current().value;
-		pos++;
-		expect(";");
-	}
-	else if (accept("index"))
-	{
-		cfg.index = current().value;
-		pos++;
-		expect(";");
-	}
-	else if (accept("server_name"))
-	{
-		cfg.server_name = current().value;
-		pos++;
-		expect(";");
-	}
-	else if (accept("client_max_body_size"))
-	{
-		cfg.client_max_body_size = std::atol(current().value.c_str());
-		pos++;
-		expect(";");
-	}
-	else if (accept("error_page"))
-	{
-		int code = std::atoi(current().value.c_str());
-		pos++;
-		cfg.error_pages[code] = current().value;
-		pos++;
-		expect(";");
-	}
-	else
-		throw(std::runtime_error("Unknown directive '" + current().value + "' at line " + intToString(current().line)));
+    if (accept("listen"))
+    {
+        cfg.port = std::atoi(current().value.c_str());
+        pos++;
+        expect(";");
+    }
+    else if (accept("host"))
+    {
+        cfg.host = current().value;
+        pos++;
+        expect(";");
+    }
+    else if (accept("root"))
+    {
+        cfg.root = current().value;
+        pos++;
+        expect(";");
+    }
+    else if (accept("index"))
+    {
+        cfg.index = current().value;
+        pos++;
+        expect(";");
+    }
+    else if (accept("server_name"))
+    {
+        cfg.server_name = current().value;
+        pos++;
+        expect(";");
+    }
+    else if (accept("client_max_body_size"))
+    {
+        cfg.client_max_body_size = std::atol(current().value.c_str());
+        pos++;
+        expect(";");
+    }
+    else if (accept("error_page"))
+    {
+        int code = std::atoi(current().value.c_str());
+        pos++;
+        cfg.error_pages[code] = current().value;
+        pos++;
+        expect(";");
+    }
+    else
+        throw(std::runtime_error("Unknown directive '" + current().value + "' at line " +
+                                 intToString(current().line)));
 }
 
 /*
@@ -148,115 +149,117 @@ void ConfigParser::parseServerDirective(Config &cfg)
  *
  * Unknown directive -> configuration error
  */
-void ConfigParser::parseLocation(Config &cfg)
+void ConfigParser::parseLocation(Config& cfg)
 {
-	Location loc;
+    Location loc;
 
-	expect("location");
-	loc.path = current().value;
-	pos++;
-	expect("{");
+    expect("location");
+    loc.path = current().value;
+    pos++;
+    expect("{");
 
-	while (!accept("}"))
-	{
-		if (accept("autoindex"))
-		{
-			loc.autoindex = (current().value == "on");
-			pos++;
-			expect(";");
-		}
-		else if (accept("root"))
-		{
-			loc.root = current().value;
-			pos++;
-			expect(";");
-		}
-		else if (accept("alias"))
-		{
-			loc.alias = current().value;
-			pos++;
-			expect(";");
-		}
-		else if (accept("index"))
-		{
-			loc.index = current().value;
-			pos++;
-			expect(";");
-		}
-		else if (accept("return"))
-		{
-			loc.redir = current().value;
-			pos++;
-			expect(";");
-		}
-		else if (accept("upload_path"))
-		{
-			loc.upload_path = current().value;
-			pos++;
-			expect(";");
-		}
-		else if (accept("client_max_body_size"))
-		{
-			loc.client_max_body_size = static_cast<size_t>(std::strtoul(current().value.c_str(), NULL, 10));
-			pos++;
-			expect(";");
-		}
-		else if (accept("allow_methods"))
-		{
-			while (current().value != ";")
-			{
-				loc.allow_methods.push_back(current().value);
-				pos++;
-			}
-			expect(";");
-		}
-		else if (accept("cgi_path"))
-		{
-			std::vector<std::string> paths;
-			while (current().value != ";")
-			{
-				paths.push_back(current().value);
-				pos++;
-			}
-			expect(";");
+    while (!accept("}"))
+    {
+        if (accept("autoindex"))
+        {
+            loc.autoindex = (current().value == "on");
+            pos++;
+            expect(";");
+        }
+        else if (accept("root"))
+        {
+            loc.root = current().value;
+            pos++;
+            expect(";");
+        }
+        else if (accept("alias"))
+        {
+            loc.alias = current().value;
+            pos++;
+            expect(";");
+        }
+        else if (accept("index"))
+        {
+            loc.index = current().value;
+            pos++;
+            expect(";");
+        }
+        else if (accept("return"))
+        {
+            loc.redir = current().value;
+            pos++;
+            expect(";");
+        }
+        else if (accept("upload_path"))
+        {
+            loc.upload_path = current().value;
+            pos++;
+            expect(";");
+        }
+        else if (accept("client_max_body_size"))
+        {
+            loc.client_max_body_size =
+                static_cast<size_t>(std::strtoul(current().value.c_str(), NULL, 10));
+            pos++;
+            expect(";");
+        }
+        else if (accept("allow_methods"))
+        {
+            while (current().value != ";")
+            {
+                loc.allow_methods.push_back(current().value);
+                pos++;
+            }
+            expect(";");
+        }
+        else if (accept("cgi_path"))
+        {
+            std::vector<std::string> paths;
+            while (current().value != ";")
+            {
+                paths.push_back(current().value);
+                pos++;
+            }
+            expect(";");
 
-			expect("cgi_ext");
-			std::vector<std::string> exts;
-			while (current().value != ";")
-			{
-				exts.push_back(current().value);
-				pos++;
-			}
-			expect(";");
+            expect("cgi_ext");
+            std::vector<std::string> exts;
+            while (current().value != ";")
+            {
+                exts.push_back(current().value);
+                pos++;
+            }
+            expect(";");
 
-			if (paths.size() != exts.size())
-				throw(std::runtime_error("cgi_path / cgi_ext mismatch"));
+            if (paths.size() != exts.size())
+                throw(std::runtime_error("cgi_path / cgi_ext mismatch"));
 
-			for (size_t i = 0; i < paths.size(); i++)
-				loc.cgi_needs[exts[i]] = paths[i];
-		}
-		else
-			throw(std::runtime_error("Unknown location directive '" + current().value + "' at line " + intToString(current().line)));
-	}
-	cfg.locations.push_back(loc);
+            for (size_t i = 0; i < paths.size(); i++)
+                loc.cgi_needs[exts[i]] = paths[i];
+        }
+        else
+            throw(std::runtime_error("Unknown location directive '" + current().value +
+                                     "' at line " + intToString(current().line)));
+    }
+    cfg.locations.push_back(loc);
 }
 
 /*
  * Parses the main SERVER BLOCK until '}' is found
  */
-void ConfigParser::parseServer(Config &cfg)
+void ConfigParser::parseServer(Config& cfg)
 {
-	expect("server");
-	expect("{");
+    expect("server");
+    expect("{");
 
-	while (!accept("}"))
-	{
-		if (current().value == "location")
-			parseLocation(cfg);
-		else
-			parseServerDirective(cfg);
-	}
-	// watch first location
+    while (!accept("}"))
+    {
+        if (current().value == "location")
+            parseLocation(cfg);
+        else
+            parseServerDirective(cfg);
+    }
+    // watch first location
 }
 /*
  * - Ensures server conf has valid default values (ex. root or index not defined)
@@ -264,29 +267,29 @@ void ConfigParser::parseServer(Config &cfg)
  * - Applies inheritance through Location blocks so they use server's root and index if not defined
  * - Sets "GET" as default allowed HTTP method when no other methods specified
  */
-static void normalizeServer(Config &cfg)
+static void normalizeServer(Config& cfg)
 {
-	if (cfg.root.empty())
-		cfg.root = ".";
-	if (cfg.index.empty())
-		cfg.index = "index.html";
+    if (cfg.root.empty())
+        cfg.root = ".";
+    if (cfg.index.empty())
+        cfg.index = "index.html";
 
-	for (size_t i = 0; i < cfg.locations.size(); ++i)
-	{
-		Location &loc = cfg.locations[i];
+    for (size_t i = 0; i < cfg.locations.size(); ++i)
+    {
+        Location& loc = cfg.locations[i];
 
-		if (loc.root.empty())
-			loc.root = cfg.root;
+        if (loc.root.empty())
+            loc.root = cfg.root;
 
-		if (loc.index.empty())
-			loc.index = cfg.index;
-		
-		if (loc.client_max_body_size == 0)
-			loc.client_max_body_size = cfg.client_max_body_size;
+        if (loc.index.empty())
+            loc.index = cfg.index;
 
-		if (loc.allow_methods.empty())
-			loc.allow_methods.push_back("GET");
-	}
+        if (loc.client_max_body_size == 0)
+            loc.client_max_body_size = cfg.client_max_body_size;
+
+        if (loc.allow_methods.empty())
+            loc.allow_methods.push_back("GET");
+    }
 }
 
 /*
@@ -297,19 +300,19 @@ static void normalizeServer(Config &cfg)
  *                      server and its locations have usable configuration settings
  * - Returns a fully populated Config structure
  */
-std::vector<Config> ConfigParser::parse(const std::string &path)
+std::vector<Config> ConfigParser::parse(const std::string& path)
 {
-	tokens = Tokenizer::tokenize(path);
-	pos = 0;
+    tokens = Tokenizer::tokenize(path);
+    pos = 0;
 
-	std::vector<Config> servers;
-	while (pos < tokens.size())
-	{
-		Config cfg;
-		parseServer(cfg);
-		normalizeServer(cfg);
-		validateServer(cfg);
-		servers.push_back(cfg);
-	}
-	return (servers);
+    std::vector<Config> servers;
+    while (pos < tokens.size())
+    {
+        Config cfg;
+        parseServer(cfg);
+        normalizeServer(cfg);
+        validateServer(cfg);
+        servers.push_back(cfg);
+    }
+    return (servers);
 }

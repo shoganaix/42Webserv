@@ -30,7 +30,8 @@
  * `resolvePath(LOC, URI)`-> which file on disk corresponds to that URI
  *
  *  Check wiki to check & unnderstand location path resolving ❗
- *    - https://github.com/shoganaix/42Webserv/wiki/Configuration-Parsing-System:-PATH-RESOLVING-CASES
+ *    -
+ * https://github.com/shoganaix/42Webserv/wiki/Configuration-Parsing-System:-PATH-RESOLVING-CASES
  * -----------------------------------------------------------------------
  */
 
@@ -42,34 +43,34 @@
  *      joinPaths("docs/root", "file") -> "docs/root/file"
  *      joinPaths("docs/root/", "/file") -> "docs/root/file"
  */
-static std::string joinPaths(const std::string &a, const std::string &b)
+static std::string joinPaths(const std::string& a, const std::string& b)
 {
-	if (a.empty())
-		return b;
-	if (b.empty())
-		return a;
+    if (a.empty())
+        return b;
+    if (b.empty())
+        return a;
 
-	std::string left = a;
-	std::string right = b;
+    std::string left = a;
+    std::string right = b;
 
-	while (!left.empty() && left[left.size() - 1] == '/')
-		left.erase(left.size() - 1);
+    while (!left.empty() && left[left.size() - 1] == '/')
+        left.erase(left.size() - 1);
 
-	while (!right.empty() && right[0] == '/')
-		right.erase(0, 1);
+    while (!right.empty() && right[0] == '/')
+        right.erase(0, 1);
 
-	if (right.empty())
-		return left;
+    if (right.empty())
+        return left;
 
-	return left + "/" + right;
+    return left + "/" + right;
 }
 
 /*
  * Checks whether str ends with '/', returns TRUE if it does (its a directory)
  */
-static bool endsWithSlash(const std::string &str)
+static bool endsWithSlash(const std::string& str)
 {
-	return (!str.empty() && str[str.size() - 1] == '/');
+    return (!str.empty() && str[str.size() - 1] == '/');
 }
 
 /*
@@ -80,26 +81,26 @@ static bool endsWithSlash(const std::string &str)
  *      loc.path="/"        uri="/tours/a"     -> "tours/a"
  *      loc.path="/tours"   uri="/tours/a"     -> "a"
  */
-static std::string computeRemainder(const std::string &locPath, const std::string &uriPath)
+static std::string computeRemainder(const std::string& locPath, const std::string& uriPath)
 {
-	if (locPath == "/")
-	{
-		if (!uriPath.empty() && uriPath[0] == '/')
-			return uriPath.substr(1);
-		return uriPath;
-	}
+    if (locPath == "/")
+    {
+        if (!uriPath.empty() && uriPath[0] == '/')
+            return uriPath.substr(1);
+        return uriPath;
+    }
 
-	if (uriPath.size() == locPath.size())
-		return "";
+    if (uriPath.size() == locPath.size())
+        return "";
 
-	size_t start = locPath.size();
-	if (start < uriPath.size() && uriPath[start] == '/')
-		start += 1;
+    size_t start = locPath.size();
+    if (start < uriPath.size() && uriPath[start] == '/')
+        start += 1;
 
-	if (start >= uriPath.size())
-		return "";
+    if (start >= uriPath.size())
+        return "";
 
-	return uriPath.substr(start);
+    return uriPath.substr(start);
 }
 
 /*
@@ -111,25 +112,25 @@ static std::string computeRemainder(const std::string &locPath, const std::strin
  *        Server returns: "/root/tours/index.html"
  */
 
-ResolvedPath resolvePath(const Location &loc, const std::string &uriPath)
+ResolvedPath resolvePath(const Location& loc, const std::string& uriPath)
 {
-	ResolvedPath out;
-	out.appendIndex = false;
+    ResolvedPath out;
+    out.appendIndex = false;
 
-	out.resPath = computeRemainder(loc.path, uriPath);
+    out.resPath = computeRemainder(loc.path, uriPath);
 
-	if (!loc.alias.empty())
+    if (!loc.alias.empty())
         out.fsPath = joinPaths(loc.alias, out.resPath);
     else
-	{
+    {
         out.fsPath = joinPaths(loc.root, out.resPath);
-	}
-	// If request is location, then search for index
-	// (/directory, /directory/ or URI ending on '/')
-	if (out.resPath.empty() || endsWithSlash(uriPath))
-	{
-		out.fsPath = joinPaths(out.fsPath, loc.index);
-		out.appendIndex = true;
-	}
+    }
+    // If request is location, then search for index
+    // (/directory, /directory/ or URI ending on '/')
+    if (out.resPath.empty() || endsWithSlash(uriPath))
+    {
+        out.fsPath = joinPaths(out.fsPath, loc.index);
+        out.appendIndex = true;
+    }
     return (out);
 }

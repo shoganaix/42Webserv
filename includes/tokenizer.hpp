@@ -18,7 +18,7 @@
 #include <iostream>
 #include <fstream>
 
-struct Token 
+struct Token
 {
     std::string value;
     int line;
@@ -26,10 +26,10 @@ struct Token
     Token(const std::string& v, int l) : value(v), line(l) {}
 };
 
-class Tokenizer 
+class Tokenizer
 {
-    public:
-        static std::vector<Token> tokenize(const std::string& path);
+  public:
+    static std::vector<Token> tokenize(const std::string& path);
 };
 
 #endif

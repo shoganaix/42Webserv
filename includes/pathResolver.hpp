@@ -17,13 +17,12 @@
 
 struct ResolvedPath
 {
-    std::string fsPath;     // FILESYSTEM path (root + resPath)
-    std::string resPath;    // REST path (URI part after location prefix)
-    bool appendIndex;       // true if URI ends with '/' -> then, appended loc.index
+    std::string fsPath;  // FILESYSTEM path (root + resPath)
+    std::string resPath; // REST path (URI part after location prefix)
+    bool appendIndex;    // true if URI ends with '/' -> then, appended loc.index
 };
 
 ResolvedPath resolvePath(const Location& loc, const std::string& uriPath);
 ResolvedPath handleRoot(const Location& loc, const std::string& uriPath);
-
 
 #endif

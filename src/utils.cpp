@@ -17,9 +17,9 @@
  *
  * Index:
  *  - intToString(): safely converts an integer into a string
- *  - safeClose(int fd): safely closes fds, checxking beforehand if its 
+ *  - safeClose(int fd): safely closes fds, checxking beforehand if its
  *      valid (>= 0)
- *  - vecToCharPtr(std::vector<std::string>& src): converts a vector of 
+ *  - vecToCharPtr(std::vector<std::string>& src): converts a vector of
  *      strings into a NULL-terminated array of char *
  * -----------------------------------------------------------------------
  */
@@ -35,17 +35,17 @@ std::string intToString(int n)
 
 void safeClose(int fd)
 {
-	if (fd >= 0)
-		close(fd);
+    if (fd >= 0)
+        close(fd);
 }
 
 std::vector<char*> vecToCharPtr(std::vector<std::string>& src)
 {
-	std::vector<char*> out;
-	for (size_t i = 0; i < src.size(); ++i)
-		out.push_back(const_cast<char*>(src[i].c_str()));
-	out.push_back(NULL);
-	return (out);
+    std::vector<char*> out;
+    for (size_t i = 0; i < src.size(); ++i)
+        out.push_back(const_cast<char*>(src[i].c_str()));
+    out.push_back(NULL);
+    return (out);
 }
 
 std::string getExtension(const std::string& path)
