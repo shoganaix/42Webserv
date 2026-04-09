@@ -3,10 +3,10 @@
 /*                                                        :::      ::::::::   */
 /*   matchLocation.hpp                                  :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: usuario <usuario@student.42.fr>            +#+  +:+       +#+        */
+/*   By: macastro <macastro@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/02/14 14:00:09 by msoriano          #+#    #+#             */
-/*   Updated: 2026/02/16 13:27:45 by usuario          ###   ########.fr       */
+/*   Updated: 2026/04/09 21:16:49 by macastro         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -15,6 +15,7 @@
 
 #include "webserv.hpp"
 
-const Location* matchLocation(const Config &cfg, const std::string &uri);
+const Location* matchLocation(const Config& cfg, const std::string& uri);
+bool locationMatches(const std::string& locPath, const std::string& requestPath);
 
 #endif

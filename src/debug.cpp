@@ -3,10 +3,10 @@
 /*                                                        :::      ::::::::   */
 /*   debug.cpp                                          :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: usuario <usuario@student.42.fr>            +#+  +:+       +#+        */
+/*   By: macastro <macastro@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/02/11 20:53:33 by usuario           #+#    #+#             */
-/*   Updated: 2026/03/24 11:26:00 by usuario          ###   ########.fr       */
+/*   Updated: 2026/04/09 20:53:19 by macastro         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -17,12 +17,11 @@
 #include "../includes/cgiHandler.hpp"
 #include "../includes/httpRequest.hpp"
 
-
 /*-----------------------------------------------------------------------
  *                      🖨️DEBUG: CONFIG PARSER🖨️
  *
  * This block of functions print the parsed configuration. We check:
- * 
+ *
  *  - Server blocks
  *  - Location blocks
  *  - Error pages
@@ -35,7 +34,7 @@
  */
 
 // ---------------------------- MULTI-SERVER CONF PARSER ------------------------
-static void printLocation(const Location &loc)
+static void printLocation(const Location& loc)
 {
     std::cout << "    " << YELLOW << "\n--- Location " << RESET << loc.path << std::endl;
     std::cout << "      Path: " << loc.path << std::endl;
@@ -44,7 +43,8 @@ static void printLocation(const Location &loc)
     std::cout << "      Autoindex: " << (loc.autoindex ? "on" : "off") << std::endl;
     std::cout << "      Client max body size: " << loc.client_max_body_size << std::endl;
     std::cout << "      Redirection: " << (loc.redir.empty() ? "(none)" : loc.redir) << std::endl;
-    std::cout << "      Upload path: " << (loc.upload_path.empty() ? "(none)" : loc.upload_path) << std::endl;
+    std::cout << "      Upload path: " << (loc.upload_path.empty() ? "(none)" : loc.upload_path)
+              << std::endl;
 
     std::cout << "Allowed methods: ";
     if (loc.allow_methods.empty())
@@ -62,15 +62,16 @@ static void printLocation(const Location &loc)
     else
     {
         for (std::map<std::string, std::string>::const_iterator it = loc.cgi_needs.begin();
-            it != loc.cgi_needs.end(); ++it)
+             it != loc.cgi_needs.end(); ++it)
         {
             std::cout << "  " << it->first << " -> " << it->second << std::endl;
         }
     }
 }
-void printConfig(const Config &cfg)
+void printConfig(const Config& cfg)
 {
-    std::cout << BLUE << "\n==================== SERVER CONFIG ==================="<< RESET << "\n";
+    std::cout << BLUE << "\n==================== SERVER CONFIG ===================" << RESET
+              << "\n";
     std::cout << "  Server name: " << cfg.server_name << std::endl;
     std::cout << "  Host: " << cfg.host << std::endl;
     std::cout << "  Port: " << cfg.port << std::endl;
@@ -84,7 +85,7 @@ void printConfig(const Config &cfg)
     else
     {
         for (std::map<int, std::string>::const_iterator it = cfg.error_pages.begin();
-            it != cfg.error_pages.end(); ++it)
+             it != cfg.error_pages.end(); ++it)
         {
             std::cout << "  " << it->first << " -> " << it->second << std::endl;
         }
@@ -94,10 +95,11 @@ void printConfig(const Config &cfg)
     for (size_t i = 0; i < cfg.locations.size(); i++)
         printLocation(cfg.locations[i]);
 
-    std::cout << BLUE << "========================================================"<< RESET << "\n";
+    std::cout << BLUE << "========================================================" << RESET
+              << "\n";
 }
 
-void printAllConfigs(const std::vector<Config> &cfgs)
+void printAllConfigs(const std::vector<Config>& cfgs)
 {
     std::cout << GREEN << "Parsed servers: " << RESET << cfgs.size() << std::endl;
     for (size_t i = 0; i < cfgs.size(); ++i)
@@ -111,13 +113,58 @@ void printAllConfigs(const std::vector<Config> &cfgs)
 /*-----------------------------------------------------------------------
  *                      🧪FULL PATH RESOLVER TESTER🧪
  *
- * Simulates HTTP request URIs and verifies that the location matching & 
+ * Simulates HTTP request URIs and verifies that the location matching &
  * path resolving algorithm selects the correct final FILESYSTEM
  * -----------------------------------------------------------------------
  */
 // --------------------------------- ROUTING RESOL. MINITEST ------------------------------
 
-void debugTestRoutingAndResolution(const std::vector<Config> &cfgs)
+void testlocationMatches()
+{
+    // Aquí puedes agregar llamadas a funciones de prueba si es necesario
+    printf("%i", locationMatches("/img/", "/img/pic.png") == true);
+    printf("%i", locationMatches("/img/", "/img/") == true);
+    printf("%i", locationMatches("/img/", "/img") == true);
+    printf("%i", locationMatches("/img/", "/imges") == false);
+    printf("%i", locationMatches("/img/", "/im") == false);
+    printf("%i", locationMatches("/img/", "/imggallery") == false);
+    printf("%i", locationMatches("/hola/que/", "/hola/que") == true);
+    printf("%i", locationMatches("/hola/que/", "/hola/que/") == true);
+    printf("%i", locationMatches("/hola/que/", "/hola/que/tal.html") == true);
+    printf("%i", locationMatches("/hola/que/", "/hola/quetal.html") == false);
+    printf("%i", locationMatches("/", "/") == true);
+    printf("%i", locationMatches("/", "/index.html") == true);
+    printf("%i", locationMatches("/", "/images/pic.png") == true);
+    printf("\n");
+    fflush(stdout);
+}
+
+void testmatchLocation()
+{
+    Config cfg;
+    Location loc1;
+    loc1.path = "/img/";
+    Location loc2;
+    loc2.path = "/img/gallery/";
+    Location loc3;
+    loc3.path = "/";
+
+    cfg.locations.push_back(loc1);
+    cfg.locations.push_back(loc2);
+    cfg.locations.push_back(loc3);
+
+    const Location* res1 = matchLocation(cfg, "/img/pic.png");
+    const Location* res2 = matchLocation(cfg, "/img/gallery/photo.jpg");
+    const Location* res3 = matchLocation(cfg, "/index.html");
+
+    printf("%i", res1 && res1->path == "/img/");
+    printf("%i", res2 && res2->path == "/img/gallery/");
+    printf("%i", res3 && res3->path == "/");
+    printf("\n");
+    fflush(stdout);
+}
+
+void debugTestRoutingAndResolution(const std::vector<Config>& cfgs)
 {
     std::cout << BLUE << "\n======= MATCHLOCATION + PATH RESOLUTION MINITEST =======\n" << RESET;
 
@@ -137,8 +184,11 @@ void debugTestRoutingAndResolution(const std::vector<Config> &cfgs)
 
         for (size_t j = 0; j < testUris.size(); ++j)
         {
-            //THESE TWO LINES CHANGE COLOR (IGNORE)
-            std::vector<std::string> colors; colors.push_back(RED);colors.push_back(GREEN);colors.push_back(BLUE);
+            // THESE TWO LINES CHANGE COLOR (IGNORE)
+            std::vector<std::string> colors;
+            colors.push_back(RED);
+            colors.push_back(GREEN);
+            colors.push_back(BLUE);
             const std::string& blockColor = colors[j % colors.size()];
 
             const std::string& uri = testUris[j];
@@ -152,10 +202,14 @@ void debugTestRoutingAndResolution(const std::vector<Config> &cfgs)
 
             ResolvedPath rp = resolvePath(*loc, uri);
 
-            std::cout << "  Config file loc.root: "  << (loc->root.empty() ? "(empty)" : loc->root) << "\n";
-            std::cout << "  Config file loc.index: " << (loc->index.empty() ? "(empty)" : loc->index) << "\n";
-            std::cout << blockColor << "REST Path: " << (rp.resPath.empty() ? "(empty)" : rp.resPath) << "\n";
-            std::cout << "FINAL FS Path: " << (rp.fsPath.empty() ? "(empty)" : rp.fsPath) << RESET  << "\n";
+            std::cout << "  Config file loc.root: " << (loc->root.empty() ? "(empty)" : loc->root)
+                      << "\n";
+            std::cout << "  Config file loc.index: "
+                      << (loc->index.empty() ? "(empty)" : loc->index) << "\n";
+            std::cout << blockColor
+                      << "REST Path: " << (rp.resPath.empty() ? "(empty)" : rp.resPath) << "\n";
+            std::cout << "FINAL FS Path: " << (rp.fsPath.empty() ? "(empty)" : rp.fsPath) << RESET
+                      << "\n";
             std::cout << "[Appended index: " << (rp.appendIndex ? "yes" : "no") << "]\n";
         }
     }
@@ -218,10 +272,14 @@ void debugTestCgiDetection(const std::vector<Config>& cfgs)
             std::cout << "  matched location: " << loc->path << std::endl;
             std::cout << "  fsPath: " << rp.fsPath << std::endl;
             std::cout << "  isCgi: " << (target.isCgi ? "yes" : "no") << std::endl;
-            std::cout << "  extension: " << (target.extension.empty() ? "(empty)" : target.extension) << std::endl;
-            std::cout << "  handlerPath: " << (target.handlerPath.empty() ? "(empty)" : target.handlerPath) << std::endl;
-            std::cout << "  scriptPath: " << (target.scriptPath.empty() ? "(empty)" : target.scriptPath) << std::endl;
-            std::cout << "  workingDir: " << (target.workingDir.empty() ? "(empty)" : target.workingDir) << std::endl;
+            std::cout << "  extension: "
+                      << (target.extension.empty() ? "(empty)" : target.extension) << std::endl;
+            std::cout << "  handlerPath: "
+                      << (target.handlerPath.empty() ? "(empty)" : target.handlerPath) << std::endl;
+            std::cout << "  scriptPath: "
+                      << (target.scriptPath.empty() ? "(empty)" : target.scriptPath) << std::endl;
+            std::cout << "  workingDir: "
+                      << (target.workingDir.empty() ? "(empty)" : target.workingDir) << std::endl;
         }
     }
 
@@ -246,20 +304,20 @@ void debugTestCgiEnv(const Config& cfg)
         return;
 
     HttpRequest req;
-    std::string raw =
-        "POST /cgi-bin/time.py?name=maria&debug=1 HTTP/1.1\r\n"
-        "Host: localhost:8080\r\n"
-        "Content-Type: application/x-www-form-urlencoded\r\n"
-        "Content-Length: 11\r\n"
-        "\r\n"
-        "hello=world";
+    std::string raw = "POST /cgi-bin/time.py?name=maria&debug=1 HTTP/1.1\r\n"
+                      "Host: localhost:8080\r\n"
+                      "Content-Type: application/x-www-form-urlencoded\r\n"
+                      "Content-Length: 11\r\n"
+                      "\r\n"
+                      "hello=world";
 
     if (!req.parse(raw))
     {
         std::cerr << "Failed to parse debug CGI request" << std::endl;
-        return ;
+        return;
     }
-    std::map<std::string, std::string> env = CgiHandler::buildEnv(req, target, cfg.server_name, cfg.port, "127.0.0.1");
+    std::map<std::string, std::string> env =
+        CgiHandler::buildEnv(req, target, cfg.server_name, cfg.port, "127.0.0.1");
 
     std::cout << BLUE << "\n======= CGI ENV TEST =======\n" << RESET;
     for (std::map<std::string, std::string>::const_iterator it = env.begin(); it != env.end(); ++it)
@@ -284,18 +342,17 @@ void debugTestCgiExecution(const Config& cfg)
         return;
 
     HttpRequest req;
-    std::string raw =
-        "GET /cgi-bin/time.py HTTP/1.1\r\n"
-        "Host: localhost:8080\r\n"
-        "\r\n";
+    std::string raw = "GET /cgi-bin/time.py HTTP/1.1\r\n"
+                      "Host: localhost:8080\r\n"
+                      "\r\n";
 
     if (!req.parse(raw))
     {
         std::cerr << "Failed to parse debug CGI request" << std::endl;
-        return ;
+        return;
     }
 
-    CgiResult result = CgiHandler::execute(req, target, cfg.server_name, cfg.port,"127.0.0.1");
+    CgiResult result = CgiHandler::execute(req, target, cfg.server_name, cfg.port, "127.0.0.1");
 
     std::cout << BLUE << "\n======= CGI EXECUTION TEST =======\n" << RESET;
     std::cout << "Exit code: " << result.exitCode << std::endl;
@@ -306,54 +363,6 @@ void debugTestCgiExecution(const Config& cfg)
     std::cout << res.toString() << std::endl;
 }
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 /*-----------------------------------------------------------------------
  *                      🧪LOCATION MATCH TESTER🧪
  *
@@ -362,7 +371,7 @@ void debugTestCgiExecution(const Config& cfg)
  * -----------------------------------------------------------------------
  */
 // ---------------------------- URI / LOC PATH-MATCHING MINITEST ------------------------
-void debugTestLocationMatching(const std::vector<Config> &cfgs)
+void debugTestLocationMatching(const std::vector<Config>& cfgs)
 {
     std::cout << BLUE << "\n======= LOCATION MATCH TEST =======\n" << RESET;
 
@@ -375,7 +384,6 @@ void debugTestLocationMatching(const std::vector<Config> &cfgs)
     testUris.push_back("/cgi-bin/time.py");
     testUris.push_back("/unknown/path");
 
-
     for (size_t i = 0; i < cfgs.size(); ++i)
     {
         std::cout << YELLOW << "\nServer #" << i + 1 << RESET << std::endl;
@@ -384,9 +392,7 @@ void debugTestLocationMatching(const std::vector<Config> &cfgs)
         {
             const Location* loc = matchLocation(cfgs[i], testUris[j]);
 
-            std::cout << "URI: " << testUris[j]
-                      << " -> matched: "
-                      << (loc ? loc->path : "NULL")
+            std::cout << "URI: " << testUris[j] << " -> matched: " << (loc ? loc->path : "NULL")
                       << std::endl;
         }
     }
@@ -398,12 +404,12 @@ void debugTestLocationMatching(const std::vector<Config> &cfgs)
 /*-----------------------------------------------------------------------
  *                      🧪RESOLVER PATH TESTER🧪
  *
- * Simulates HTTP request URIs and verifies the final FILESYSTEM 
+ * Simulates HTTP request URIs and verifies the final FILESYSTEM
  * resolution process after matchLocation()
  * -----------------------------------------------------------------------
  */
 // ---------------------------- FINAL FILESYSTEM MINITEST ----------------
-void debugTestPathResolution(const std::vector<Config> &cfgs)
+void debugTestPathResolution(const std::vector<Config>& cfgs)
 {
     std::cout << BLUE << "\n======= PATH RESOLUTION TEST =======\n" << RESET;
 

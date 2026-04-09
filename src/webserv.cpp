@@ -6,7 +6,7 @@
 /*   By: macastro <macastro@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/01/08 18:51:13 by angnavar          #+#    #+#             */
-/*   Updated: 2026/04/09 19:45:53 by macastro         ###   ########.fr       */
+/*   Updated: 2026/04/09 21:07:15 by macastro         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -321,8 +321,7 @@ HttpResponse Webserv::routeRequest(const HttpRequest& req, const Config& server)
     if (!loc)
     {
         // -------------- DEBUG: ------------------
-        std::cerr << "[ROUTE] matched location path=" << loc->path
-                  << " client_max_body_size=" << loc->client_max_body_size << std::endl;
+        std::cerr << "[ROUTE] no matching location" << std::endl;
         // ----------------------------------------
         res.setStatusCode(404);
         res.setBody("<html><body><h1>404 Not Found</h1></body></html>");
@@ -332,7 +331,8 @@ HttpResponse Webserv::routeRequest(const HttpRequest& req, const Config& server)
     // -------------- DEBUG: ------------------
     else
     {
-        std::cerr << "[ROUTE] no matching location" << std::endl;
+        std::cerr << "[ROUTE] matched location path=" << loc->path
+                  << " client_max_body_size=" << loc->client_max_body_size << std::endl;
     }
     // ----------------------------------------
     if (!loc->redir.empty())
@@ -375,6 +375,7 @@ HttpResponse Webserv::routeRequest(const HttpRequest& req, const Config& server)
 
     // 5. Resolve real path (FILESYSTEM)
     ResolvedPath resolved = resolvePath(*loc, req.getPath());
+    std::cerr << "[ROUTE] resolved path=" << resolved.fsPath << std::endl;
 
     // 6. Calling CGIHandler if necessary
     if (isCgiRequest(*loc, resolved.fsPath))

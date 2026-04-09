@@ -6,7 +6,7 @@
 /*   By: macastro <macastro@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2025/12/10 20:21:26 by msoriano          #+#    #+#             */
-/*   Updated: 2026/04/09 19:15:16 by macastro         ###   ########.fr       */
+/*   Updated: 2026/04/09 20:57:33 by macastro         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -31,13 +31,28 @@
 #include "../includes/colors.hpp"
 #include "../includes/configParser.hpp"
 
-#ifdef DEBUG
 #include "../includes/debug.hpp"
+#ifdef DEBUG
 #endif
 
-//-----------------------------------------------------------------------------------------
+void run_tests()
+{
+    testlocationMatches();
+    testmatchLocation();
+    // printAllConfigs(cfgs);
+    // // debugTestLocationMatching(cfgs);
+    // // debugTestPathResolution(cfgs);
+    // debugTestRoutingAndResolution(cfgs);
+    // debugTestCgiDetection(cfgs);
+    // debugTestCgiEnv(cfgs[0]);
+    // debugTestCgiExecution(cfgs[0]);
+}
+
 int main(int argc, char** argv)
 {
+    // run_tests();
+    // return (0);
+
     if (argc != 1 && argc != 2)
     {
         Logger::logMsg(RED, CONSOLE_OUTPUT, "ERROR:\n- ./webserv\n- ./webserv <config_file>\n");
@@ -48,17 +63,6 @@ int main(int argc, char** argv)
     {
         ConfigParser parser;
         std::vector<Config> cfgs = parser.parse(configFile);
-//--------------------------DEBUG PARSER------------------------
-#ifdef DEBUG
-        printAllConfigs(cfgs);
-        // debugTestLocationMatching(cfgs);
-        // debugTestPathResolution(cfgs);
-        debugTestRoutingAndResolution(cfgs);
-        debugTestCgiDetection(cfgs);
-        debugTestCgiEnv(cfgs[0]);
-        debugTestCgiExecution(cfgs[0]);
-#endif
-        //--------------------------------------------------------------
         Webserv server(configFile);
         server.run();
         return (0);
