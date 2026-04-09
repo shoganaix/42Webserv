@@ -3,20 +3,20 @@
 /*                                                        :::      ::::::::   */
 /*   main.cpp                                           :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: usuario <usuario@student.42.fr>            +#+  +:+       +#+        */
+/*   By: macastro <macastro@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2025/12/10 20:21:26 by msoriano          #+#    #+#             */
-/*   Updated: 2026/03/09 01:14:14 by usuario          ###   ########.fr       */
+/*   Updated: 2026/04/09 19:15:16 by macastro         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
 /*-----------------------------------------------------------------------
  *                          📂MAIN PROGRAM📂
- * 
+ *
  *  - Validates []args
  *  - Determines which config file to load
  *  - Parses and validates configuration
- *  - (DEBUG mode) 
+ *  - (DEBUG mode)
  *      -> Print parsed configuration
  *      -> ...
  *  - Initializes Webserv engine
@@ -26,39 +26,38 @@
  * -----------------------------------------------------------------------
  */
 
-#include "../includes/webserv.hpp"      
-#include "../includes/logger.hpp"       
-#include "../includes/colors.hpp"       
-#include "../includes/configParser.hpp" 
+#include "../includes/webserv.hpp"
+#include "../includes/logger.hpp"
+#include "../includes/colors.hpp"
+#include "../includes/configParser.hpp"
 
 #ifdef DEBUG
-# include "../includes/debug.hpp"
+#include "../includes/debug.hpp"
 #endif
 
-
 //-----------------------------------------------------------------------------------------
-int main(int argc, char **argv)
+int main(int argc, char** argv)
 {
-	if (argc != 1 && argc != 2) 
+    if (argc != 1 && argc != 2)
     {
         Logger::logMsg(RED, CONSOLE_OUTPUT, "ERROR:\n- ./webserv\n- ./webserv <config_file>\n");
         return (1);
     }
     const std::string configFile = (argc == 1 ? "configs/default.conf" : argv[1]);
-	try 
-	{
+    try
+    {
         ConfigParser parser;
         std::vector<Config> cfgs = parser.parse(configFile);
-        //--------------------------DEBUG PARSER------------------------
-        #ifdef DEBUG
-            printAllConfigs(cfgs);
-            //debugTestLocationMatching(cfgs);
-            //debugTestPathResolution(cfgs);
-            debugTestRoutingAndResolution(cfgs);
-            debugTestCgiDetection(cfgs);
-            debugTestCgiEnv(cfgs[0]);
-            debugTestCgiExecution(cfgs[0]);
-        #endif
+//--------------------------DEBUG PARSER------------------------
+#ifdef DEBUG
+        printAllConfigs(cfgs);
+        // debugTestLocationMatching(cfgs);
+        // debugTestPathResolution(cfgs);
+        debugTestRoutingAndResolution(cfgs);
+        debugTestCgiDetection(cfgs);
+        debugTestCgiEnv(cfgs[0]);
+        debugTestCgiExecution(cfgs[0]);
+#endif
         //--------------------------------------------------------------
         Webserv server(configFile);
         server.run();
@@ -67,6 +66,6 @@ int main(int argc, char **argv)
     catch (const std::exception& e)
     {
         std::cerr << RED << "Error: " << RESET << e.what() << "\n";
-         return (1);
+        return (1);
     }
 }

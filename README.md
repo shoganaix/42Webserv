@@ -16,8 +16,8 @@
 For all the documentation you may need go to our [wiki](https://github.com/shoganaix/42Webserv/wiki)
 
 ## Project Description
-Webserv is a C++ HTTP server capable of handling multiple clients using `poll()`.  
-It parses HTTP requests according to the standard, serves static files, handles error pages, and can implement multiple server configurations using a `.conf` file.  
+Webserv is a C++ HTTP server capable of handling multiple clients using `poll()`.
+It parses HTTP requests according to the standard, serves static files, handles error pages, and can implement multiple server configurations using a `.conf` file.
 HTTP Message can be either a request or response.
 
 For more detailed information, refer to the [**subject**](https://github.com/shoganaix/42Webserv/blob/main/en.subject.pdf)
@@ -55,7 +55,7 @@ Content-Length: 1234
 
 ---
 ## HTTP Methods
-Method        | Description  
+Method        | Description
 ------------- | -------------
 GET ✔️        | Retrieve a specific resource or a collection of resources, should not affect the data/resource
 POST ✔️       | Perform resource-specific processing on the request content
@@ -76,10 +76,49 @@ cd Webserv
 ```
 
 2. Compile and run:
-   
+
 ```bash
 make
 ./webserv [Config File] ## leave empty to use the default configuration
+```
+
+## Pre-commit
+
+This repository includes a pre-commit setup to keep commits clean and consistent.
+
+### What it checks
+- Trailing whitespace and end-of-file newlines
+- Merge conflict markers
+- Large files accidentally added
+- C/C++ formatting on `src/` and `includes/` using `clang-format`
+- C++ compilation with `make` before the commit is accepted
+
+### Install
+
+macOS:
+
+```bash
+brew install pre-commit clang-format
+pre-commit install
+```
+
+Linux (Debian/Ubuntu):
+
+```bash
+sudo apt update
+sudo apt install -y pre-commit clang-format
+pre-commit install
+```
+
+### Run manually
+
+```bash
+# only staged files
+pre-commit run
+# specific file
+pre-commit run file1.cpp
+# all files
+pre-commit run --all-files
 ```
 
 ## Grade

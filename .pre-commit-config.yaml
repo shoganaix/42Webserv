@@ -1,0 +1,30 @@
+minimum_pre_commit_version: "3.6.0"
+default_stages: [pre-commit]
+exclude: ^(build/|logs/|YoupiBanane/|docs/cgi-bin/)
+
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: check-merge-conflict
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+      - id: mixed-line-ending
+      - id: check-added-large-files
+
+  - repo: local
+    hooks:
+      - id: clang-format-cpp
+        name: clang-format (src/includes)
+        entry: clang-format -i --style=file
+        language: system
+        pass_filenames: true
+        files: ^(src|includes)/.*\.(c|cc|cpp|h|hpp)$
+
+      - id: cpp-compile-check
+        name: C++ compile check (default local, optional docker)
+        entry: make
+        # entry: docker exec cpp-dev make
+        language: system
+        pass_filenames: false
+        always_run: true
