@@ -10,6 +10,7 @@ Desde la carpeta donde está el `Dockerfile`:
 
 ```bash
 docker build -t cpp-dev .
+docker build --platform linux/amd64 -t cpp-dev .
 ```
 
 👉 Crea una imagen:
@@ -23,6 +24,7 @@ docker build -t cpp-dev .
 
 ```bash
 docker run -dit \
+  --platform linux/amd64 \
   --name cpp-dev \
   -v $(pwd):/app \
   -w /app \
@@ -74,7 +76,7 @@ make
 
 
 > 🧠 Notas
-> 
+>
 > * ✔️ Todo se ejecuta dentro del contenedor
 > * ✔️ Editas código en tu máquina → se refleja automáticamente
 > * ✔️ Usa `cpp-dev` en lugar de container_id

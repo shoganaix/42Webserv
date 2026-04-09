@@ -3,10 +3,10 @@
 /*                                                        :::      ::::::::   */
 /*   webserv.cpp                                        :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: usuario <usuario@student.42.fr>            +#+  +:+       +#+        */
+/*   By: macastro <macastro@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/01/08 18:51:13 by angnavar          #+#    #+#             */
-/*   Updated: 2026/04/06 13:43:35 by usuario          ###   ########.fr       */
+/*   Updated: 2026/04/09 19:45:53 by macastro         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -25,25 +25,31 @@
  *
  * Error pages	   ❌
  * - HTML hardcodeado para 404, 403, 405, 413, 500 ...
- * - Eso cubre la parte “default” de forma básica pero no demuestra que esté leyendo y sirviendo páginas de error desde la config.
+ * - Eso cubre la parte “default” de forma básica pero no demuestra que esté leyendo y sirviendo
+ páginas de error desde la config.
  *
  * Upload	       ❌
- * - El subject pide que los clientes puedan subir archivos y que en config puedas autorizar subida y definir storage location
- * - En handlePost() se guarda el body tal cual en upload_<timestamp>.txt dentro de upload_path o "."
+ * - El subject pide que los clientes puedan subir archivos y que en config puedas autorizar subida
+ y definir storage location
+ * - En handlePost() se guarda el body tal cual en upload_<timestamp>.txt dentro de upload_path o
+ "."
  * - PERO
  *    -> no se valida bien si la ruta de upload existe
  *    -> no se gestiona multipart/form-data
  *    -> no se recupera el nombre real del fichero
  *    -> no se distingue entre POST “normal” y una subida real
- *    -> no se garantiza luego “upload some file to the server and get it back” como pide la evaluation sheet
+ *    -> no se garantiza luego “upload some file to the server and get it back” como pide la
+ evaluation sheet
  *
  * Non blocking IO ❌
  * - Usar un solo poll() o equivalente para lectura y escritura
  * - Está prohibido ajustar el comportamiento mirando errno después de read o write.
- * - Si revisan errno tras read/recv/write/send, la evaluación es un 0 (revisar handleClientData() y handleClientWrite())
+ * - Si revisan errno tras read/recv/write/send, la evaluación es un 0 (revisar handleClientData() y
+ handleClientWrite())
  *
  * Default file for directories ✔
- * - El subject dice que en config debes poder definir el fichero por defecto cuando el recurso pedido es un directorio.
+ * - El subject dice que en config debes poder definir el fichero por defecto cuando el recurso
+ pedido es un directorio.
  * - En handleGet() si el target es directorio:
  *   autoindex está on, generas listing, si no, se devuelves 404
  *   PERO NO si ya hay autoindex, mostrar index por directorio (DONE)
@@ -84,34 +90,31 @@
  * - Normalizes + validates
  * - Stores the resulting configurations internally for later use
  */
-Webserv::Webserv(const std::string &configFile)
+Webserv::Webserv(const std::string& configFile)
 {
-	std::cout << BLUE << "Webserv initialized with config: " << RESET << configFile << std::endl;
+    std::cout << BLUE << "Webserv initialized with config: " << RESET << configFile << std::endl;
 
-	// 1) Parse configuration
-	ConfigParser parser;
-	this->config = parser.parse(configFile);
-	
-	// -------------- DEBUG: ------------------
-	for (size_t i = 0; i < this->config.size(); ++i)
-	{
-		std::cerr << "[CONFIG] server " << i
-				<< " port=" << this->config[i].port
-				<< " root=" << this->config[i].root
-				<< std::endl;
+    // 1) Parse configuration
+    ConfigParser parser;
+    this->config = parser.parse(configFile);
 
-		for (size_t j = 0; j < this->config[i].locations.size(); ++j)
-		{
-			const Location &loc = this->config[i].locations[j];
-			std::cerr << "[CONFIG]   location=" << loc.path
-					<< " max_body=" << loc.client_max_body_size
-					<< std::endl;
-		}
-	}
-	// ----------------------------------------
+    // -------------- DEBUG: ------------------
+    for (size_t i = 0; i < this->config.size(); ++i)
+    {
+        std::cerr << "[CONFIG] server " << i << " port=" << this->config[i].port
+                  << " root=" << this->config[i].root << std::endl;
 
-	// 2) Normalize + validate configuration
-	validateAllServers(this->config);
+        for (size_t j = 0; j < this->config[i].locations.size(); ++j)
+        {
+            const Location& loc = this->config[i].locations[j];
+            std::cerr << "[CONFIG]   location=" << loc.path
+                      << " max_body=" << loc.client_max_body_size << std::endl;
+        }
+    }
+    // ----------------------------------------
+
+    // 2) Normalize + validate configuration
+    validateAllServers(this->config);
 }
 
 /*
@@ -127,71 +130,74 @@ Webserv::Webserv(const std::string &configFile)
  */
 void Webserv::setSockets()
 {
-	// for each Config in this->config:
-	//     1. Create socket, set O_NONBLOCK, bind host:port, listen
-	//     2. Add to poll fd vector
-	//     3. Keep a map listeningFd -> serverIndex
-	epollFd = epoll_create1(0);
-	if (epollFd < 0)
-	{
-		std::cerr << RED << "Error epoll create: " << strerror(errno) << RESET << std::endl;
-	}
+    // for each Config in this->config:
+    //     1. Create socket, set O_NONBLOCK, bind host:port, listen
+    //     2. Add to poll fd vector
+    //     3. Keep a map listeningFd -> serverIndex
+    epollFd = epoll_create1(0);
+    if (epollFd < 0)
+    {
+        std::cerr << RED << "Error epoll create: " << strerror(errno) << RESET << std::endl;
+    }
 
-	for (size_t i = 0; i < this->config.size(); ++i)
-	{
-		int fd = socket(AF_INET, SOCK_STREAM, 0);
-		if (fd < 0)
-			continue;
-		int opt = 1;
-		setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
-		fcntl(fd, F_SETFL, O_NONBLOCK);
+    for (size_t i = 0; i < this->config.size(); ++i)
+    {
+        int fd = socket(AF_INET, SOCK_STREAM, 0);
+        if (fd < 0)
+            continue;
+        int opt = 1;
+        setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
+        fcntl(fd, F_SETFL, O_NONBLOCK);
 
-		addrinfo hints, *res;
-		std::memset(&hints, 0, sizeof(hints));
-		hints.ai_family = AF_INET;
-		hints.ai_socktype = SOCK_STREAM;
+        addrinfo hints, *res;
+        std::memset(&hints, 0, sizeof(hints));
+        hints.ai_family = AF_INET;
+        hints.ai_socktype = SOCK_STREAM;
 
-		if (getaddrinfo(config[i].host.c_str(), NULL, &hints, &res) != 0)
-		{
-			std::cerr << RED << "Error binding port " << config[i].port << " " << strerror(errno) << RESET << std::endl;
-			continue;
-		}
+        if (getaddrinfo(config[i].host.c_str(), NULL, &hints, &res) != 0)
+        {
+            std::cerr << RED << "Error binding port " << config[i].port << " " << strerror(errno)
+                      << RESET << std::endl;
+            continue;
+        }
 
-		sockaddr_in *addr = (struct sockaddr_in *)res->ai_addr;
-		addr->sin_port = htons(config[i].port);
+        sockaddr_in* addr = (struct sockaddr_in*)res->ai_addr;
+        addr->sin_port = htons(config[i].port);
 
-		if (bind(fd, res->ai_addr, res->ai_addrlen) < 0)
-		{
-			std::cerr << RED << "Error binding port " << config[i].port << ": " << strerror(errno) << RESET << std::endl;
-			freeaddrinfo(res);
-			close(fd);
-			continue;
-		}
-		freeaddrinfo(res);
+        if (bind(fd, res->ai_addr, res->ai_addrlen) < 0)
+        {
+            std::cerr << RED << "Error binding port " << config[i].port << ": " << strerror(errno)
+                      << RESET << std::endl;
+            freeaddrinfo(res);
+            close(fd);
+            continue;
+        }
+        freeaddrinfo(res);
 
-		if (listen(fd, 128) < 0)
-		{
-			std::cerr << RED << "Error listen fd: " << strerror(errno) << RESET << std::endl;
-			close(fd);
-			continue;
-		}
+        if (listen(fd, 128) < 0)
+        {
+            std::cerr << RED << "Error listen fd: " << strerror(errno) << RESET << std::endl;
+            close(fd);
+            continue;
+        }
 
-		struct epoll_event ev;
-		std::memset(&ev, 0, sizeof(ev));
-		ev.events = EPOLLIN;
-		ev.data.fd = fd;
+        struct epoll_event ev;
+        std::memset(&ev, 0, sizeof(ev));
+        ev.events = EPOLLIN;
+        ev.data.fd = fd;
 
-		if (epoll_ctl(epollFd, EPOLL_CTL_ADD, fd, &ev) < 0)
-		{
-			std::cerr << "Error epoll_ctl" << std::endl;
-			close(fd);
-			continue;
-		}
+        if (epoll_ctl(epollFd, EPOLL_CTL_ADD, fd, &ev) < 0)
+        {
+            std::cerr << "Error epoll_ctl" << std::endl;
+            close(fd);
+            continue;
+        }
 
-		this->fdToConfig[fd] = this->config[i];
-		this->fds.push_back(fd);
-		std::cout << PURPLE << "Server [" << config[i].server_name << "] listening on port " << config[i].port << RESET << std::endl;
-	}
+        this->fdToConfig[fd] = this->config[i];
+        this->fds.push_back(fd);
+        std::cout << PURPLE << "Server [" << config[i].server_name << "] listening on port "
+                  << config[i].port << RESET << std::endl;
+    }
 }
 
 /*
@@ -199,12 +205,12 @@ void Webserv::setSockets()
  */
 bool Webserv::isListeningFd(int fd)
 {
-	for (size_t i = 0; i < this->fds.size(); ++i)
-	{
-		if (this->fds[i] == fd)
-			return true;
-	}
-	return false;
+    for (size_t i = 0; i < this->fds.size(); ++i)
+    {
+        if (this->fds[i] == fd)
+            return true;
+    }
+    return false;
 }
 
 /*
@@ -214,38 +220,38 @@ bool Webserv::isListeningFd(int fd)
  */
 void Webserv::acceptNewConnection(int listeningFd)
 {
-	sockaddr_in clientAddr;
-	socklen_t clientLen = sizeof(clientAddr);
+    sockaddr_in clientAddr;
+    socklen_t clientLen = sizeof(clientAddr);
 
-	int clientFd = accept(listeningFd, (struct sockaddr *)&clientAddr, &clientLen);
-	if (clientFd < 0)
-	{
-		std::cerr << "Error in accept: " << strerror(errno) << std::endl;
-		return;
-	}
-	fcntl(clientFd, F_SETFL, O_NONBLOCK);
+    int clientFd = accept(listeningFd, (struct sockaddr*)&clientAddr, &clientLen);
+    if (clientFd < 0)
+    {
+        std::cerr << "Error in accept: " << strerror(errno) << std::endl;
+        return;
+    }
+    fcntl(clientFd, F_SETFL, O_NONBLOCK);
 
-	ClientState newClient;
-	newClient.fd = clientFd;
-	newClient.config = this->fdToConfig[listeningFd];
-	newClient.writeBuffer = "";
-	this->clients[clientFd] = newClient;
+    ClientState newClient;
+    newClient.fd = clientFd;
+    newClient.config = this->fdToConfig[listeningFd];
+    newClient.writeBuffer = "";
+    this->clients[clientFd] = newClient;
 
-	epoll_event ev;
-	std::memset(&ev, 0, sizeof(ev));
-	ev.events = EPOLLIN;
-	ev.data.fd = clientFd;
+    epoll_event ev;
+    std::memset(&ev, 0, sizeof(ev));
+    ev.events = EPOLLIN;
+    ev.data.fd = clientFd;
 
-	if (epoll_ctl(this->epollFd, EPOLL_CTL_ADD, clientFd, &ev) < 0)
-	{
-		std::cerr << "Error adding client to epoll" << std::endl;
-		this->clients.erase(clientFd);
-		close(clientFd);
-		return;
-	}
+    if (epoll_ctl(this->epollFd, EPOLL_CTL_ADD, clientFd, &ev) < 0)
+    {
+        std::cerr << "Error adding client to epoll" << std::endl;
+        this->clients.erase(clientFd);
+        close(clientFd);
+        return;
+    }
 
-	std::cout << YELLOW << "New connection accepted on FD: " << clientFd
-			  << " for server: " << newClient.config.server_name << RESET << std::endl;
+    std::cout << YELLOW << "New connection accepted on FD: " << clientFd
+              << " for server: " << newClient.config.server_name << RESET << std::endl;
 }
 
 /*
@@ -297,180 +303,184 @@ void Webserv::acceptNewConnection(int listeningFd)
  *	send to client
  *
  */
-HttpResponse Webserv::routeRequest(const HttpRequest &req, const Config &server)
+HttpResponse Webserv::routeRequest(const HttpRequest& req, const Config& server)
 {
-	HttpResponse res;
-	// -------------- DEBUG: ------------------
-	std::cerr << "[ROUTE] method=" << req.getMethod()
-			  << " path=" << req.getPath()
-			  << " body_size=" << req.getBody().size()
-			  << std::endl;
-	// ----------------------------------------
-	// 1. Match location algorythm
-	const Location *loc = matchLocation(server, req.getPath());
-	// STEPS 2, 3 & 4: MOVED FROM HTTPRESPONSE
-	//   - Why? HttpResponse shouldnt be the one deciding if reqeust can or cannotr execute but only handle reponse after core decides
+    HttpResponse res;
+    // -------------- DEBUG: ------------------
+    std::cerr << "[ROUTE] method=" << req.getMethod() << " path=" << req.getPath()
+              << " body_size=" << req.getBody().size() << std::endl;
+    // ----------------------------------------
+    // 1. Match location algorythm
+    const Location* loc = matchLocation(server, req.getPath());
+    // STEPS 2, 3 & 4: MOVED FROM HTTPRESPONSE
+    //   - Why? HttpResponse shouldnt be the one deciding if reqeust can or cannotr execute but only
+    //   handle reponse after core decides
 
-	// 2. If NO location        → 404
-	//	  	 redirection        → 302
-	if (!loc)
-	{
-		// -------------- DEBUG: ------------------
-		std::cerr << "[ROUTE] matched location path=" << loc->path
-				  << " client_max_body_size=" << loc->client_max_body_size
-				  << std::endl;
-		// ----------------------------------------
-		res.setStatusCode(404);
-		res.setBody("<html><body><h1>404 Not Found</h1></body></html>");
-		res.addHeader("Content-Type", "text/html");
-		return (res);
-	}
-	// -------------- DEBUG: ------------------
-	else
-	{
-		std::cerr << "[ROUTE] no matching location" << std::endl;
-	}
-	// ----------------------------------------
-	if (!loc->redir.empty())
-	{
-		res.setRedirect(loc->redir, 302);
-		return (res);
-	}
-	// 3. Check allowed methods
-	bool allowed = false;
-	for (size_t i = 0; i < loc->allow_methods.size(); ++i)
-	{
-		if (loc->allow_methods[i] == req.getMethod())
-		{
-			allowed = true;
-			break;
-		}
-	}
-	if (!allowed)
-	{
-		// -------------- DEBUG: ------------------
-		std::cerr << "[ROUTE] returning 405" << std::endl;
-		// ----------------------------------------
-		res.setStatusCode(405);
-		res.setBody("<html><body><h1>405 Method Not Allowed</h1></body></html>");
-		res.addHeader("Content-Type", "text/html");
-		return (res);
-	}
+    // 2. If NO location        → 404
+    //	  	 redirection        → 302
+    if (!loc)
+    {
+        // -------------- DEBUG: ------------------
+        std::cerr << "[ROUTE] matched location path=" << loc->path
+                  << " client_max_body_size=" << loc->client_max_body_size << std::endl;
+        // ----------------------------------------
+        res.setStatusCode(404);
+        res.setBody("<html><body><h1>404 Not Found</h1></body></html>");
+        res.addHeader("Content-Type", "text/html");
+        return (res);
+    }
+    // -------------- DEBUG: ------------------
+    else
+    {
+        std::cerr << "[ROUTE] no matching location" << std::endl;
+    }
+    // ----------------------------------------
+    if (!loc->redir.empty())
+    {
+        res.setRedirect(loc->redir, 302);
+        return (res);
+    }
+    // 3. Check allowed methods
+    bool allowed = false;
+    for (size_t i = 0; i < loc->allow_methods.size(); ++i)
+    {
+        if (loc->allow_methods[i] == req.getMethod())
+        {
+            allowed = true;
+            break;
+        }
+    }
+    if (!allowed)
+    {
+        // -------------- DEBUG: ------------------
+        std::cerr << "[ROUTE] returning 405" << std::endl;
+        // ----------------------------------------
+        res.setStatusCode(405);
+        res.setBody("<html><body><h1>405 Method Not Allowed</h1></body></html>");
+        res.addHeader("Content-Type", "text/html");
+        return (res);
+    }
 
-	// 4. Check allowed client_max_body_size
-	if (loc->client_max_body_size > 0 && req.getBody().length() > loc->client_max_body_size)
-	{
-		std::cerr << "[ROUTE] returning 413"
-				  << " limit=" << loc->client_max_body_size
-				  << " body=" << req.getBody().length()
-				  << std::endl;
-		res.setStatusCode(413);
-		res.setBody("<html><body><h1>413 Payload Too Large</h1></body></html>");
-		res.addHeader("Content-Type", "text/html");
-		return (res);
-	}
+    // 4. Check allowed client_max_body_size
+    if (loc->client_max_body_size > 0 && req.getBody().length() > loc->client_max_body_size)
+    {
+        std::cerr << "[ROUTE] returning 413"
+                  << " limit=" << loc->client_max_body_size << " body=" << req.getBody().length()
+                  << std::endl;
+        res.setStatusCode(413);
+        res.setBody("<html><body><h1>413 Payload Too Large</h1></body></html>");
+        res.addHeader("Content-Type", "text/html");
+        return (res);
+    }
 
-	// 5. Resolve real path (FILESYSTEM)
-	ResolvedPath resolved = resolvePath(*loc, req.getPath());
+    // 5. Resolve real path (FILESYSTEM)
+    ResolvedPath resolved = resolvePath(*loc, req.getPath());
 
-	// 6. Calling CGIHandler if necessary
-	if (isCgiRequest(*loc, resolved.fsPath))
-	{
-		try
-		{
-			CgiTarget target = _cgiHandler->detectCgi(*loc, resolved.fsPath);
-			CgiResult result = _cgiHandler->execute(req, target, server.server_name, server.port, "127.0.0.1");
+    // 6. Calling CGIHandler if necessary
+    if (isCgiRequest(*loc, resolved.fsPath))
+    {
+        try
+        {
+            CgiTarget target = _cgiHandler->detectCgi(*loc, resolved.fsPath);
+            CgiResult result =
+                _cgiHandler->execute(req, target, server.server_name, server.port, "127.0.0.1");
 
-			// Creamos el contexto para que handleCgiEvent sepa qué hacer
-			CgiContext* ctx = new CgiContext();
-			ctx->clientFd = req.getClientFd(); // Asegúrate de haberlo seteado antes
-			ctx->bodyToWrite = req.getBody();
-			ctx->bytesWritten = 0;
-			ctx->pid = result.pid;
-			ctx->inFd = result.inFd;
-    		ctx->outFd = result.outFd;
-			#ifdef DEBUG
-			std::cout << "DEBUG: Cliente FD: " << req.getClientFd() 
-			<< " | Pipe In: " << result.inFd 
-			<< " | Pipe Out: " << result.outFd << std::endl;
-			#endif
-			// Mapeamos ambos FDs al mismo contexto
-			this->_cgiFds[result.inFd] = ctx;
-			this->_cgiFds[result.outFd] = ctx;
+            // Creamos el contexto para que handleCgiEvent sepa qué hacer
+            CgiContext* ctx = new CgiContext();
+            ctx->clientFd = req.getClientFd(); // Asegúrate de haberlo seteado antes
+            ctx->bodyToWrite = req.getBody();
+            ctx->bytesWritten = 0;
+            ctx->pid = result.pid;
+            ctx->inFd = result.inFd;
+            ctx->outFd = result.outFd;
+#ifdef DEBUG
+            std::cout << "DEBUG: Cliente FD: " << req.getClientFd() << " | Pipe In: " << result.inFd
+                      << " | Pipe Out: " << result.outFd << std::endl;
+#endif
+            // Mapeamos ambos FDs al mismo contexto
+            this->_cgiFds[result.inFd] = ctx;
+            this->_cgiFds[result.outFd] = ctx;
 
-			if (req.getBody().empty()) {
-				// CLAVE: Si no hay body, cerramos el pipe de entrada YA.
-				// Esto envía un EOF al binario CGI y lo desbloquea.
-				epoll_ctl(this->epollFd, EPOLL_CTL_DEL, ctx->inFd, NULL);
-				close(ctx->inFd);
-				_cgiFds.erase(ctx->inFd);
-				ctx->inFd = -1; 
-			} else {
-				// Si hay body (POST 100MB), registramos para escribir
-				struct epoll_event evIn;
-				std::memset(&evIn, 0, sizeof(evIn));
-				evIn.events = EPOLLOUT;
-				evIn.data.fd = ctx->inFd;
-				epoll_ctl(this->epollFd, EPOLL_CTL_ADD, ctx->inFd, &evIn);
-			}
+            if (req.getBody().empty())
+            {
+                // CLAVE: Si no hay body, cerramos el pipe de entrada YA.
+                // Esto envía un EOF al binario CGI y lo desbloquea.
+                epoll_ctl(this->epollFd, EPOLL_CTL_DEL, ctx->inFd, NULL);
+                close(ctx->inFd);
+                _cgiFds.erase(ctx->inFd);
+                ctx->inFd = -1;
+            }
+            else
+            {
+                // Si hay body (POST 100MB), registramos para escribir
+                struct epoll_event evIn;
+                std::memset(&evIn, 0, sizeof(evIn));
+                evIn.events = EPOLLOUT;
+                evIn.data.fd = ctx->inFd;
+                epoll_ctl(this->epollFd, EPOLL_CTL_ADD, ctx->inFd, &evIn);
+            }
 
-			// Registramos en EPOLL
-			struct epoll_event ev;
-			std::memset(&ev, 0, sizeof(ev));
-			
-			ev.events = EPOLLOUT; // Para escribir el body al CGI
-			ev.data.fd = result.inFd;
-			epoll_ctl(this->epollFd, EPOLL_CTL_ADD, result.inFd, &ev);
+            // Registramos en EPOLL
+            struct epoll_event ev;
+            std::memset(&ev, 0, sizeof(ev));
 
-			ev.events = EPOLLIN;  // Para leer la respuesta del CGI
-			ev.data.fd = result.outFd;
-			epoll_ctl(this->epollFd, EPOLL_CTL_ADD, result.outFd, &ev);
+            ev.events = EPOLLOUT; // Para escribir el body al CGI
+            ev.data.fd = result.inFd;
+            epoll_ctl(this->epollFd, EPOLL_CTL_ADD, result.inFd, &ev);
 
-			// MARCAMOS LA RESPUESTA COMO CGI
-			res.setIsCgi(true); 
-			return (res);
-		}
-		catch (std::exception &e)
-		{
-			res.setStatusCode(500);
-			res.setBody("<html><body><h1>500 Internal Server Error</h1></body></html>");
-			res.addHeader("Content-Type", "text/html");
-			return (res);
-		}
-	}
-	// 7. Relative path for normal handlers
-	//   - Why? We want to keep the logic of “how to handle a GET/POST/DELETE request” inside HttpResponse but the logic of “what is the real path of the resource we are trying to access” should be outside of it and be decided by the core router
+            ev.events = EPOLLIN; // Para leer la respuesta del CGI
+            ev.data.fd = result.outFd;
+            epoll_ctl(this->epollFd, EPOLL_CTL_ADD, result.outFd, &ev);
 
-	// COMPROBAR POR QUE HACE SUBSTR !! *
-	std::string relativePath = resolved.fsPath;
-	if (relativePath.empty())
-		relativePath = "/";
+            // MARCAMOS LA RESPUESTA COMO CGI
+            res.setIsCgi(true);
+            return (res);
+        }
+        catch (std::exception& e)
+        {
+            res.setStatusCode(500);
+            res.setBody("<html><body><h1>500 Internal Server Error</h1></body></html>");
+            res.addHeader("Content-Type", "text/html");
+            return (res);
+        }
+    }
+    // 7. Relative path for normal handlers
+    //   - Why? We want to keep the logic of “how to handle a GET/POST/DELETE request” inside
+    //   HttpResponse but the logic of “what is the real path of the resource we are trying to
+    //   access” should be outside of it and be decided by the core router
 
-	// 8. Dispatch method
-	if (req.getMethod() == "GET" || req.getMethod() == "HEAD")
-		res.handleGet(relativePath, *loc);
-	else if (req.getMethod() == "POST")
-		res.handlePost(resolved.fsPath, req.getBody(), *loc);
-	else if (req.getMethod() == "DELETE")
-		res.handleDelete(relativePath, *loc);
-	else
-	{
-		res.setStatusCode(405);
-		res.setBody("<html><body><h1>405 Method Not Allowed</h1></body></html>");
-		res.addHeader("Content-Type", "text/html");
-	}
-	return (res);
+    // COMPROBAR POR QUE HACE SUBSTR !! *
+    std::string relativePath = resolved.fsPath;
+    if (relativePath.empty())
+        relativePath = "/";
+
+    // 8. Dispatch method
+    if (req.getMethod() == "GET" || req.getMethod() == "HEAD")
+        res.handleGet(relativePath, *loc);
+    else if (req.getMethod() == "POST")
+        res.handlePost(resolved.fsPath, req.getBody(), *loc);
+    else if (req.getMethod() == "DELETE")
+        res.handleDelete(relativePath, *loc);
+    else
+    {
+        res.setStatusCode(405);
+        res.setBody("<html><body><h1>405 Method Not Allowed</h1></body></html>");
+        res.addHeader("Content-Type", "text/html");
+    }
+    return (res);
 }
 
-void Webserv::finalizeCgiResponse( CgiContext* ctx, int fd)
+void Webserv::finalizeCgiResponse(CgiContext* ctx, int fd)
 {
     HttpResponse res = _cgiHandler->parseCgiOutput(ctx->rawResponse);
-    if (res.getStatusCode() < 100) res.setStatusCode(200);
+    if (res.getStatusCode() < 100)
+        res.setStatusCode(200);
 
-    if (this->clients.count(ctx->clientFd)) {
+    if (this->clients.count(ctx->clientFd))
+    {
         this->clients[ctx->clientFd].writeBuffer = res.toString(false);
         this->clients[ctx->clientFd].bytesSent = 0;
-        
+
         struct epoll_event ev;
         std::memset(&ev, 0, sizeof(ev));
         ev.events = EPOLLOUT;
@@ -497,20 +507,23 @@ void Webserv::handleCgiEvent(int fd, uint32_t events)
     {
         if (ctx->bytesWritten < ctx->bodyToWrite.size())
         {
-            ssize_t n = write(fd, ctx->bodyToWrite.data() + ctx->bytesWritten, 
+            ssize_t n = write(fd, ctx->bodyToWrite.data() + ctx->bytesWritten,
                               ctx->bodyToWrite.size() - ctx->bytesWritten);
-            if (n > 0) {
+            if (n > 0)
+            {
                 ctx->bytesWritten += n;
-            } else if (n < 0 && errno != EAGAIN && errno != EWOULDBLOCK) {
+            }
+            else if (n < 0 && errno != EAGAIN && errno != EWOULDBLOCK)
+            {
                 // AQUÍ PARAMOS LAS 'E': Si falla, sacamos el FD de epoll
                 epoll_ctl(this->epollFd, EPOLL_CTL_DEL, fd, NULL);
                 _cgiFds.erase(fd);
                 close(fd);
                 ctx->inFd = -1;
-                return; 
+                return;
             }
         }
-        
+
         // Cierre normal al terminar los 100MB
         if (ctx->inFd != -1 && ctx->bytesWritten >= ctx->bodyToWrite.size())
         {
@@ -524,24 +537,28 @@ void Webserv::handleCgiEvent(int fd, uint32_t events)
 
     // --- 2. LECTURA DEL CGI (Desde el outFd / Pipe 9) ---
     // IMPORTANTE: Un 'if' nuevo, no un 'else if'
-    if (_cgiFds.count(fd) && fd == ctx->outFd && (events & (EPOLLIN | EPOLLHUP | EPOLLERR))) 
+    if (_cgiFds.count(fd) && fd == ctx->outFd && (events & (EPOLLIN | EPOLLHUP | EPOLLERR)))
     {
         char buffer[32768];
         ssize_t n = read(fd, buffer, sizeof(buffer));
 
-        if (n > 0) {
+        if (n > 0)
+        {
             ctx->rawResponse.append(buffer, n);
         }
         else if (n == 0 || (n < 0 && errno != EAGAIN && errno != EWOULDBLOCK))
         {
             // El CGI terminó: enviamos la respuesta acumulada al cliente
-            std::cout << GREEN << "[SUCCESS] CGI finalizado. Enviando respuesta..." << RESET << std::endl;
-            
+            std::cout << GREEN << "[SUCCESS] CGI finalizado. Enviando respuesta..." << RESET
+                      << std::endl;
+
             // Aquí pones tu lógica de parsear y enviar (o llamar a tu finalizeCgiResponse)
             HttpResponse res = _cgiHandler->parseCgiOutput(ctx->rawResponse);
-            if (res.getStatusCode() < 100) res.setStatusCode(200);
+            if (res.getStatusCode() < 100)
+                res.setStatusCode(200);
 
-            if (this->clients.count(ctx->clientFd)) {
+            if (this->clients.count(ctx->clientFd))
+            {
                 this->clients[ctx->clientFd].writeBuffer = res.toString(false);
                 this->clients[ctx->clientFd].bytesSent = 0;
                 struct epoll_event ev = {};
@@ -555,11 +572,10 @@ void Webserv::handleCgiEvent(int fd, uint32_t events)
             _cgiFds.erase(fd);
             close(fd);
             waitpid(ctx->pid, NULL, WNOHANG);
-            delete ctx; 
+            delete ctx;
         }
     }
 }
-
 
 /*
  * Handles a client socket event:
@@ -584,173 +600,177 @@ void Webserv::handleClientData(int fd)
         return;
     }
 
-    ClientState &client = this->clients[fd];
-	client.request.setClientFd(fd);
+    ClientState& client = this->clients[fd];
+    client.request.setClientFd(fd);
     client.readBuffer.append(buffer, bytes);
 
     try
     {
-		#ifdef DEBUG // Log cada 10MB
-        if (client.readBuffer.size() > 1000000 || client.request.getContentLength() > 1000000) {
-             static size_t last_size = 0;
-             if (client.readBuffer.size() > last_size + 10485760) { 
-                 std::cout << BLUE << "[DEBUG] Recibiendo datos... Buffer actual: " 
-                           << client.readBuffer.size() << " bytes" << RESET << std::endl;
-                 last_size = client.readBuffer.size();
-             }
+#ifdef DEBUG // Log cada 10MB
+        if (client.readBuffer.size() > 1000000 || client.request.getContentLength() > 1000000)
+        {
+            static size_t last_size = 0;
+            if (client.readBuffer.size() > last_size + 10485760)
+            {
+                std::cout << BLUE << "[DEBUG] Recibiendo datos... Buffer actual: "
+                          << client.readBuffer.size() << " bytes" << RESET << std::endl;
+                last_size = client.readBuffer.size();
+            }
         }
-		#endif
-		// ------------------------------------------------------------
-		// EARLY REJECTION: TEST 200
-		// If headers are already received, check Content-Length
-		// and respond with 413 without waiting for the full body
-		// ------------------------------------------------------------
-		size_t headersEnd = client.readBuffer.find("\r\n\r\n");
-		if (headersEnd != std::string::npos)
-		{
-			// Extract only the header section from the buffer
-			std::string headerPart = client.readBuffer.substr(0, headersEnd);
-			std::istringstream stream(headerPart);
-			std::string line;
+#endif
+        // ------------------------------------------------------------
+        // EARLY REJECTION: TEST 200
+        // If headers are already received, check Content-Length
+        // and respond with 413 without waiting for the full body
+        // ------------------------------------------------------------
+        size_t headersEnd = client.readBuffer.find("\r\n\r\n");
+        if (headersEnd != std::string::npos)
+        {
+            // Extract only the header section from the buffer
+            std::string headerPart = client.readBuffer.substr(0, headersEnd);
+            std::istringstream stream(headerPart);
+            std::string line;
 
-			std::string method;
-			std::string path;
-			std::string version;
-			std::map<std::string, std::string> headers;
+            std::string method;
+            std::string path;
+            std::string version;
+            std::map<std::string, std::string> headers;
 
-			// Parse the request line (e.g., "POST /path HTTP/1.1")
-			if (std::getline(stream, line))
-			{
-				if (!line.empty() && line[line.size() - 1] == '\r')
-					line.erase(line.size() - 1);
+            // Parse the request line (e.g., "POST /path HTTP/1.1")
+            if (std::getline(stream, line))
+            {
+                if (!line.empty() && line[line.size() - 1] == '\r')
+                    line.erase(line.size() - 1);
 
-				std::istringstream iss(line);
-				iss >> method >> path >> version;
+                std::istringstream iss(line);
+                iss >> method >> path >> version;
 
-				// Remove query string from the path (everything after '?')
-				size_t qpos = path.find('?');
-				if (qpos != std::string::npos)
-					path = path.substr(0, qpos);
-			}
+                // Remove query string from the path (everything after '?')
+                size_t qpos = path.find('?');
+                if (qpos != std::string::npos)
+                    path = path.substr(0, qpos);
+            }
 
-			// Parse all HTTP headers into a map
-			while (std::getline(stream, line))
-			{
-				if (!line.empty() && line[line.size() - 1] == '\r')
-					line.erase(line.size() - 1);
+            // Parse all HTTP headers into a map
+            while (std::getline(stream, line))
+            {
+                if (!line.empty() && line[line.size() - 1] == '\r')
+                    line.erase(line.size() - 1);
 
-				if (line.empty())
-					break;
+                if (line.empty())
+                    break;
 
-				size_t colon = line.find(':');
-				if (colon == std::string::npos)
-					continue;
+                size_t colon = line.find(':');
+                if (colon == std::string::npos)
+                    continue;
 
-				std::string key = line.substr(0, colon);
-				std::string value = line.substr(colon + 1);
+                std::string key = line.substr(0, colon);
+                std::string value = line.substr(colon + 1);
 
-				// Trim leading spaces/tabs from header value
-				while (!value.empty() && (value[0] == ' ' || value[0] == '\t'))
-					value.erase(0, 1);
+                // Trim leading spaces/tabs from header value
+                while (!value.empty() && (value[0] == ' ' || value[0] == '\t'))
+                    value.erase(0, 1);
 
-				// Normalize header key to lowercase for case-insensitive lookup
-				for (size_t i = 0; i < key.size(); ++i)
-					key[i] = std::tolower(static_cast<unsigned char>(key[i]));
+                // Normalize header key to lowercase for case-insensitive lookup
+                for (size_t i = 0; i < key.size(); ++i)
+                    key[i] = std::tolower(static_cast<unsigned char>(key[i]));
 
-				headers[key] = value;
-			}
+                headers[key] = value;
+            }
 
-			// If we have a valid path and a Content-Length header, validate it
-			if (!path.empty() && headers.count("content-length"))
-			{
-				// Match request path to server location configuration
-				const Location *loc = matchLocation(client.config, path);
+            // If we have a valid path and a Content-Length header, validate it
+            if (!path.empty() && headers.count("content-length"))
+            {
+                // Match request path to server location configuration
+                const Location* loc = matchLocation(client.config, path);
 
-				// -------------- DEBUG: ------------------
-				std::cerr << "[EARLY] path=" << path
-				<< " content-length=" << headers["content-length"]
-				<< std::endl;
-				// ----------------------------------------
-				if (loc)
-				{
-					// -------------- DEBUG: ------------------
-					std::cerr << "[EARLY] matched location path=" << loc->path
-									<< " client_max_body_size=" << loc->client_max_body_size
-									<< std::endl;
-					// ----------------------------------------
-					char *endptr = NULL;
+                // -------------- DEBUG: ------------------
+                std::cerr << "[EARLY] path=" << path
+                          << " content-length=" << headers["content-length"] << std::endl;
+                // ----------------------------------------
+                if (loc)
+                {
+                    // -------------- DEBUG: ------------------
+                    std::cerr << "[EARLY] matched location path=" << loc->path
+                              << " client_max_body_size=" << loc->client_max_body_size << std::endl;
+                    // ----------------------------------------
+                    char* endptr = NULL;
 
-					// Convert Content-Length header to numeric value
-					unsigned long declaredLen = std::strtoul(headers["content-length"].c_str(), &endptr, 10);
+                    // Convert Content-Length header to numeric value
+                    unsigned long declaredLen =
+                        std::strtoul(headers["content-length"].c_str(), &endptr, 10);
 
-					// Validate that Content-Length is a valid number
-					if (*headers["content-length"].c_str() == '\0' || (endptr && *endptr != '\0'))
-						throw std::runtime_error("Invalid Content-Length value");
+                    // Validate that Content-Length is a valid number
+                    if (*headers["content-length"].c_str() == '\0' || (endptr && *endptr != '\0'))
+                        throw std::runtime_error("Invalid Content-Length value");
 
-					// Check against configured maximum body size
-					if (loc->client_max_body_size > 0 &&
-						declaredLen > loc->client_max_body_size)
-					{
-						// -------------- DEBUG: ------------------
-						std::cerr << "[EARLY] returning 413"
-								<< " declaredLen=" << declaredLen
-								<< " limit=" << loc->client_max_body_size
-								<< std::endl;
-						// ----------------------------------------
-						// Build 413 Payload Too Large response
-						HttpResponse res;
-						res.setStatusCode(413);
-						res.setBody("<html><body><h1>413 Payload Too Large</h1></body></html>");
-						res.addHeader("Content-Type", "text/html");
+                    // Check against configured maximum body size
+                    if (loc->client_max_body_size > 0 && declaredLen > loc->client_max_body_size)
+                    {
+                        // -------------- DEBUG: ------------------
+                        std::cerr << "[EARLY] returning 413"
+                                  << " declaredLen=" << declaredLen
+                                  << " limit=" << loc->client_max_body_size << std::endl;
+                        // ----------------------------------------
+                        // Build 413 Payload Too Large response
+                        HttpResponse res;
+                        res.setStatusCode(413);
+                        res.setBody("<html><body><h1>413 Payload Too Large</h1></body></html>");
+                        res.addHeader("Content-Type", "text/html");
 
-						// Prepare response for sending
-						client.writeBuffer = res.toString(false);
-						client.bytesSent = 0;
+                        // Prepare response for sending
+                        client.writeBuffer = res.toString(false);
+                        client.bytesSent = 0;
 
-						// Clear read buffer to stop processing request body
-						client.readBuffer.clear();
+                        // Clear read buffer to stop processing request body
+                        client.readBuffer.clear();
 
-						// Switch epoll to write mode to send the response immediately
-						epoll_event ev;
-						std::memset(&ev, 0, sizeof(ev));
-						ev.events = EPOLLOUT;
-						ev.data.fd = fd;
-						epoll_ctl(this->epollFd, EPOLL_CTL_MOD, fd, &ev);
+                        // Switch epoll to write mode to send the response immediately
+                        epoll_event ev;
+                        std::memset(&ev, 0, sizeof(ev));
+                        ev.events = EPOLLOUT;
+                        ev.data.fd = fd;
+                        epoll_ctl(this->epollFd, EPOLL_CTL_MOD, fd, &ev);
 
-						return;
-					}
-				}
-			}
-		}
-		// ------------------------------------------------------------
+                        return;
+                    }
+                }
+            }
+        }
+        // ------------------------------------------------------------
         if (client.request.parse(client.readBuffer))
         {
-			#ifdef DEBUG
-            std::cout << GREEN << "[DEBUG] REQUEST COMPLETA. Método: " << client.request.getMethod() 
-                      << " | Body size: " << client.request.getBody().size() << " bytes" << RESET << std::endl;
-			#endif
+#ifdef DEBUG
+            std::cout << GREEN << "[DEBUG] REQUEST COMPLETA. Método: " << client.request.getMethod()
+                      << " | Body size: " << client.request.getBody().size() << " bytes" << RESET
+                      << std::endl;
+#endif
 
-            Config *server = &this->clients[fd].config;
-            
+            Config* server = &this->clients[fd].config;
+
             // Aquí es donde el router decide si es CGI
             HttpResponse res = routeRequest(client.request, *server);
 
-			if (res.getIsCgi()) 
+            if (res.getIsCgi())
             {
-				#ifdef DEBUG
-                std::cout << PURPLE << "[DEBUG] Petición CGI detectada. Delegando a handleCgiEvent..." << RESET << std::endl;
-				#endif
-                return; 
+#ifdef DEBUG
+                std::cout << PURPLE
+                          << "[DEBUG] Petición CGI detectada. Delegando a handleCgiEvent..."
+                          << RESET << std::endl;
+#endif
+                return;
             }
-			// -------------- DEBUG: ------------------
-			std::cerr << "[HANDLE] response status=" << res.getStatusCode() << std::endl;
-			// -----------------------------------------
+            // -------------- DEBUG: ------------------
+            std::cerr << "[HANDLE] response status=" << res.getStatusCode() << std::endl;
+            // -----------------------------------------
             client.writeBuffer = res.toString(client.request.getMethod() == "HEAD");
-			client.bytesSent = 0;
+            client.bytesSent = 0;
             if (client.writeBuffer.size() < 500) // Solo imprimimos si no es el body de 100MB
-                std::cout << "Respuesta: " << client.writeBuffer << " para FD " << fd << RESET << std::endl;
+                std::cout << "Respuesta: " << client.writeBuffer << " para FD " << fd << RESET
+                          << std::endl;
             else
-                std::cout << "Respuesta grande generada (" << client.writeBuffer.size() << " bytes)" << std::endl;
+                std::cout << "Respuesta grande generada (" << client.writeBuffer.size() << " bytes)"
+                          << std::endl;
             epoll_event ev;
             std::memset(&ev, 0, sizeof(ev));
             ev.events = EPOLLOUT;
@@ -760,24 +780,25 @@ void Webserv::handleClientData(int fd)
             client.readBuffer.clear();
         }
     }
-	catch (std::exception &e)
-	{
-		std::cout << RED << "Error processing request on FD " << fd << ": " << e.what() << RESET << std::endl;
-		HttpResponse res;
-		res.setStatusCode(400);
-		res.setBody("<html><body><h1>400 Bad Request</h1></body></html>");
-		res.addHeader("Content-Type", "text/html");
-		client.writeBuffer = res.toString(client.request.getMethod() == "HEAD");
+    catch (std::exception& e)
+    {
+        std::cout << RED << "Error processing request on FD " << fd << ": " << e.what() << RESET
+                  << std::endl;
+        HttpResponse res;
+        res.setStatusCode(400);
+        res.setBody("<html><body><h1>400 Bad Request</h1></body></html>");
+        res.addHeader("Content-Type", "text/html");
+        client.writeBuffer = res.toString(client.request.getMethod() == "HEAD");
 
-		client.bytesSent = 0;
+        client.bytesSent = 0;
         client.readBuffer.clear();
-		// CAMBIO A MODO ESCRITURA (EPOLLOUT)
-		epoll_event ev;
-		std::memset(&ev, 0, sizeof(ev));
-		ev.events = EPOLLOUT;
-		ev.data.fd = fd;
-		epoll_ctl(this->epollFd, EPOLL_CTL_MOD, fd, &ev);
-	}
+        // CAMBIO A MODO ESCRITURA (EPOLLOUT)
+        epoll_event ev;
+        std::memset(&ev, 0, sizeof(ev));
+        ev.events = EPOLLOUT;
+        ev.data.fd = fd;
+        epoll_ctl(this->epollFd, EPOLL_CTL_MOD, fd, &ev);
+    }
 }
 /*
  * ...
@@ -787,12 +808,14 @@ void Webserv::handleClientWrite(int fd)
     if (this->clients.find(fd) == this->clients.end())
         return;
 
-    ClientState &client = this->clients[fd];
+    ClientState& client = this->clients[fd];
 
-    if (client.writeBuffer.empty() || client.bytesSent >= client.writeBuffer.size()) {
-		#ifdef DEBUG
-        std::cout << YELLOW << "[DEBUG] Nada que enviar o índice corrupto en FD " << fd << RESET << std::endl;
-		#endif
+    if (client.writeBuffer.empty() || client.bytesSent >= client.writeBuffer.size())
+    {
+#ifdef DEBUG
+        std::cout << YELLOW << "[DEBUG] Nada que enviar o índice corrupto en FD " << fd << RESET
+                  << std::endl;
+#endif
         client.bytesSent = 0;
         client.writeBuffer.clear();
         struct epoll_event ev;
@@ -808,25 +831,31 @@ void Webserv::handleClientWrite(int fd)
 
     ssize_t sent = send(fd, ptr, remaining, 0);
 
-    if (sent > 0) {
+    if (sent > 0)
+    {
         client.bytesSent += sent;
-		#ifdef DEBUG
+#ifdef DEBUG
         std::cout << "[DEBUG] FD " << fd << " envió " << sent << " bytes." << std::endl;
-		#endif
-    } else if (sent < 0) {
+#endif
+    }
+    else if (sent < 0)
+    {
         if (errno == EAGAIN || errno == EWOULDBLOCK)
             return;
-        std::cerr << RED << " [ERROR] Send failed on FD " << fd << ": " << strerror(errno) << RESET << std::endl;
+        std::cerr << RED << " [ERROR] Send failed on FD " << fd << ": " << strerror(errno) << RESET
+                  << std::endl;
         this->closeConnection(fd);
         return;
     }
 
     // FINALIZACIÓN:
-    if (client.bytesSent >= client.writeBuffer.size()) {
-        std::cout << GREEN << "[SUCCESS] Respuesta enviada completa al FD " << fd << RESET << std::endl;
+    if (client.bytesSent >= client.writeBuffer.size())
+    {
+        std::cout << GREEN << "[SUCCESS] Respuesta enviada completa al FD " << fd << RESET
+                  << std::endl;
         client.writeBuffer.clear();
         client.bytesSent = 0;
-        
+
         this->closeConnection(fd);
     }
 }
@@ -866,47 +895,47 @@ void Webserv::closeConnection(int fd)
  */
 void Webserv::run()
 {
-	setSockets();
-	signal(SIGPIPE, SIG_IGN);
+    setSockets();
 
-	
-	std::cout << GREEN << "Webserv running..." << RESET << std::endl;
+    // Ignore SIGPIPE -> avoid crashing when writing to a closed socket
+    signal(SIGPIPE, SIG_IGN);
 
-	epoll_event epoll_events[100];
-	while (true)
-	{
-		int nfds = epoll_wait(this->epollFd, epoll_events, 100, -1);
-		if (nfds < 0)
-		{
-			if (errno == EINTR)
-				continue;
-			throw std::runtime_error("epoll_wait error");
-		}
+    std::cout << GREEN << "Webserv running..." << RESET << std::endl;
 
-		for (int i = 0; i < nfds; i++)
-		{
-			int fd = epoll_events[i].data.fd;
-			if (isListeningFd(fd))
-				acceptNewConnection(fd);
-			else if (_cgiFds.count(fd))
+    epoll_event epoll_events[100];
+    while (true)
+    {
+        int nfds = epoll_wait(this->epollFd, epoll_events, 100, -1);
+        if (nfds < 0)
+        {
+            if (errno == EINTR)
+                continue;
+            throw std::runtime_error("epoll_wait error");
+        }
+
+        for (int i = 0; i < nfds; i++)
+        {
+            int fd = epoll_events[i].data.fd;
+            if (isListeningFd(fd))
+                acceptNewConnection(fd);
+            else if (_cgiFds.count(fd))
                 handleCgiEvent(fd, epoll_events[i].events);
-			else
-			{
-				if (epoll_events[i].events & (EPOLLHUP | EPOLLERR)) {
-					closeConnection(fd);
-					continue; 
-				}
-				if (epoll_events[i].events & EPOLLIN)
-					handleClientData(fd);
-				if (epoll_events[i].events & EPOLLOUT)
-					handleClientWrite(fd);
-			}
+            else
+            {
+                if (epoll_events[i].events & (EPOLLHUP | EPOLLERR))
+                {
+                    closeConnection(fd);
+                    continue;
+                }
+                if (epoll_events[i].events & EPOLLIN)
+                    handleClientData(fd);
+                if (epoll_events[i].events & EPOLLOUT)
+                    handleClientWrite(fd);
+            }
 
-			// Limpiar y cerrar si el socket se rompe bruscamente
-			if (epoll_events[i].events & (EPOLLHUP | EPOLLERR))
-				closeConnection(fd);
-		}
-	}
+            // Limpiar y cerrar si el socket se rompe bruscamente
+            if (epoll_events[i].events & (EPOLLHUP | EPOLLERR))
+                closeConnection(fd);
+        }
+    }
 }
-
-
