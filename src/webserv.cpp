@@ -6,7 +6,7 @@
 /*   By: macastro <macastro@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/01/08 18:51:13 by angnavar          #+#    #+#             */
-/*   Updated: 2026/04/10 13:04:40 by macastro         ###   ########.fr       */
+/*   Updated: 2026/04/10 14:32:12 by macastro         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -53,8 +53,14 @@
  * - En handleGet() si el target es directorio:
  *   autoindex está on, generas listing, si no, se devuelves 404
  *   PERO NO si ya hay autoindex, mostrar index por directorio (DONE)
-
-*/
+ *
+ * 2026 abril
+ * Qué priorizar ahora:
+ * - Primero pasar el tester: comportamiento correcto según config, sin regressions.
+ * - Luego bajar ruido de logs grandes en webserv.cpp.
+ * - Después optimizar rendimiento de body chunked para no reparsear todo el buffer en cada paquete,
+ moviendo a parse incremental en httpRequest.cpp.
+ */
 
 /*-----------------------------------------------------------------------
  *                          🧠WEBSERV BRAIN🧠
@@ -371,27 +377,6 @@ HttpResponse Webserv::routeRequest(const HttpRequest& req, const Config& server)
         res.setRedirect(loc->redir, 302);
         return (res);
     }
-    // 3. Check allowed methods
-    bool allowed = false;
-    for (size_t i = 0; i < loc->allow_methods.size(); ++i)
-    {
-        if (loc->allow_methods[i] == req.getMethod())
-        {
-            allowed = true;
-            break;
-        }
-    }
-    if (!allowed)
-    {
-        // -------------- DEBUG: ------------------
-        std::cerr << "[ROUTE] returning 405" << std::endl;
-        // ----------------------------------------
-        res.setStatusCode(405);
-        res.setBody("<html><body><h1>405 Method Not Allowed</h1></body></html>");
-        res.addHeader("Content-Type", "text/html");
-        return (res);
-    }
-
     // 4. Check allowed client_max_body_size
     if (loc->client_max_body_size > 0 && req.getBody().length() > loc->client_max_body_size)
     {
@@ -408,12 +393,50 @@ HttpResponse Webserv::routeRequest(const HttpRequest& req, const Config& server)
     ResolvedPath resolved = resolvePath(*loc, req.getPath());
     std::cerr << "[ROUTE] resolved path=" << resolved.fsPath << std::endl;
 
-    // 6. Calling CGIHandler if necessary
+    // 6. Check allowed methods.
+    // CGI gets priority so POST to .bla works even if the location is GET-only.
+    CgiTarget target;
     if (isCgiRequest(*loc, resolved.fsPath))
+        target = _cgiHandler->detectCgi(*loc, resolved.fsPath);
+
+    if (!target.isCgi)
+    {
+        bool allowed = false;
+        for (size_t i = 0; i < loc->allow_methods.size(); ++i)
+        {
+            if (loc->allow_methods[i] == req.getMethod())
+            {
+                allowed = true;
+                break;
+            }
+        }
+        if (!allowed)
+        {
+            // -------------- DEBUG: ------------------
+            std::cerr << "[ROUTE] returning 405" << std::endl;
+            // ----------------------------------------
+            res.setStatusCode(405);
+            res.setBody("<html><body><h1>405 Method Not Allowed</h1></body></html>");
+            res.addHeader("Content-Type", "text/html");
+            return (res);
+        }
+    }
+    else if (req.getMethod() != "GET" && req.getMethod() != "POST")
+    {
+        // -------------- DEBUG: ------------------
+        std::cerr << "[ROUTE] returning 405" << std::endl;
+        // ----------------------------------------
+        res.setStatusCode(405);
+        res.setBody("<html><body><h1>405 Method Not Allowed</h1></body></html>");
+        res.addHeader("Content-Type", "text/html");
+        return (res);
+    }
+
+    // 7. Calling CGIHandler if necessary
+    if (target.isCgi)
     {
         try
         {
-            CgiTarget target = _cgiHandler->detectCgi(*loc, resolved.fsPath);
             CgiResult result =
                 _cgiHandler->execute(req, target, server.server_name, server.port, "127.0.0.1");
 
@@ -590,6 +613,8 @@ void Webserv::handleCgiEvent(int fd, uint32_t events)
  */
 void Webserv::handleClientData(int fd)
 {
+    const size_t kProgressLogStepBytes = 5 * 1024 * 1024;
+
     char buffer[8192];
     ssize_t bytes = recv(fd, buffer, sizeof(buffer), 0);
 
@@ -612,18 +637,6 @@ void Webserv::handleClientData(int fd)
 
     try
     {
-#ifdef DEBUG // Log cada 10MB
-        if (client.readBuffer.size() > 1000000 || client.request.getContentLength() > 1000000)
-        {
-            static size_t last_size = 0;
-            if (client.readBuffer.size() > last_size + 10485760)
-            {
-                std::cout << BLUE << "[DEBUG] Recibiendo datos... Buffer actual: "
-                          << client.readBuffer.size() << " bytes" << RESET << std::endl;
-                last_size = client.readBuffer.size();
-            }
-        }
-#endif
         // ------------------------------------------------------------
         // EARLY REJECTION: TEST 200
         // If headers are already received, check Content-Length
@@ -632,6 +645,11 @@ void Webserv::handleClientData(int fd)
         size_t headersEnd = client.readBuffer.find("\r\n\r\n");
         if (headersEnd != std::string::npos)
         {
+            size_t bodyStart = headersEnd + 4;
+            size_t bodyAvailable = 0;
+            if (client.readBuffer.size() > bodyStart)
+                bodyAvailable = client.readBuffer.size() - bodyStart;
+
             // Extract only the header section from the buffer
             std::string headerPart = client.readBuffer.substr(0, headersEnd);
             std::istringstream stream(headerPart);
@@ -684,40 +702,91 @@ void Webserv::handleClientData(int fd)
                 headers[key] = value;
             }
 
+            if (!client.headersLogged)
+            {
+                std::string cl = headers.count("content-length") ? headers["content-length"] : "-";
+                std::string te =
+                    headers.count("transfer-encoding") ? headers["transfer-encoding"] : "-";
+                std::cerr << "[HEADERS] FD=" << fd << " method=" << method << " path=" << path
+                          << " content-length=" << cl << " transfer-encoding=" << te << std::endl;
+                client.headersLogged = true;
+            }
+
+            if (bodyAvailable >= client.lastBodyLogCheckpoint + kProgressLogStepBytes)
+            {
+                client.lastBodyLogCheckpoint =
+                    (bodyAvailable / kProgressLogStepBytes) * kProgressLogStepBytes;
+                std::cerr << "[BODY-PROGRESS] FD=" << fd << " received_body=" << bodyAvailable
+                          << " bytes" << std::endl;
+            }
+
+            const Location* loc = NULL;
+            if (!path.empty())
+                loc = matchLocation(client.config, path);
+
+            size_t maxBody = client.config.client_max_body_size;
+            if (loc)
+                maxBody = loc->client_max_body_size;
+
+            bool isChunked = false;
+            if (headers.count("transfer-encoding"))
+            {
+                std::string te = headers["transfer-encoding"];
+                for (size_t i = 0; i < te.size(); ++i)
+                    te[i] = std::tolower(static_cast<unsigned char>(te[i]));
+                isChunked = (te.find("chunked") != std::string::npos);
+            }
+
+            // Important: bodyAvailable includes chunk metadata, so this early check
+            // is reliable only for non-chunked bodies.
+            if (maxBody > 0 && !isChunked && bodyAvailable > maxBody)
+            {
+                std::cerr << "[EARLY] returning 413 body_received=" << bodyAvailable
+                          << " limit=" << maxBody << std::endl;
+                HttpResponse res;
+                res.setStatusCode(413);
+                res.setBody("<html><body><h1>413 Payload Too Large</h1></body></html>");
+                res.addHeader("Content-Type", "text/html");
+
+                client.writeBuffer = res.toString(false);
+                client.bytesSent = 0;
+                client.readBuffer.clear();
+                client.headersLogged = false;
+                client.lastBodyLogCheckpoint = 0;
+
+                epoll_event ev;
+                std::memset(&ev, 0, sizeof(ev));
+                ev.events = EPOLLOUT;
+                ev.data.fd = fd;
+                epoll_ctl(this->epollFd, EPOLL_CTL_MOD, fd, &ev);
+                return;
+            }
+
             // If we have a valid path and a Content-Length header, validate it
             if (!path.empty() && headers.count("content-length"))
             {
-                // Match request path to server location configuration
-                const Location* loc = matchLocation(client.config, path);
+                unsigned long declaredLen = 0;
+                char* endptr = NULL;
+                declaredLen = std::strtoul(headers["content-length"].c_str(), &endptr, 10);
+                if (*headers["content-length"].c_str() == '\0' || (endptr && *endptr != '\0'))
+                    throw std::runtime_error("Invalid Content-Length value");
 
-                // -------------- DEBUG: ------------------
-                std::cerr << "[EARLY] path=" << path
-                          << " content-length=" << headers["content-length"] << std::endl;
-                // ----------------------------------------
+                size_t waitingFor = 0;
+                if (declaredLen > bodyAvailable)
+                    waitingFor = declaredLen - bodyAvailable;
+                std::cerr << "[BODY-CHECK] path=" << path
+                          << " declared_content-length=" << declaredLen
+                          << " body_available=" << bodyAvailable << " waiting_for=" << waitingFor
+                          << " bytes" << std::endl;
+
                 if (loc)
                 {
-                    // -------------- DEBUG: ------------------
-                    std::cerr << "[EARLY] matched location path=" << loc->path
-                              << " client_max_body_size=" << loc->client_max_body_size << std::endl;
-                    // ----------------------------------------
-                    char* endptr = NULL;
-
-                    // Convert Content-Length header to numeric value
-                    unsigned long declaredLen =
-                        std::strtoul(headers["content-length"].c_str(), &endptr, 10);
-
-                    // Validate that Content-Length is a valid number
-                    if (*headers["content-length"].c_str() == '\0' || (endptr && *endptr != '\0'))
-                        throw std::runtime_error("Invalid Content-Length value");
-
                     // Check against configured maximum body size
                     if (loc->client_max_body_size > 0 && declaredLen > loc->client_max_body_size)
                     {
-                        // -------------- DEBUG: ------------------
                         std::cerr << "[EARLY] returning 413"
                                   << " declaredLen=" << declaredLen
                                   << " limit=" << loc->client_max_body_size << std::endl;
-                        // ----------------------------------------
                         // Build 413 Payload Too Large response
                         HttpResponse res;
                         res.setStatusCode(413);
@@ -730,6 +799,8 @@ void Webserv::handleClientData(int fd)
 
                         // Clear read buffer to stop processing request body
                         client.readBuffer.clear();
+                        client.headersLogged = false;
+                        client.lastBodyLogCheckpoint = 0;
 
                         // Switch epoll to write mode to send the response immediately
                         epoll_event ev;
@@ -746,6 +817,10 @@ void Webserv::handleClientData(int fd)
         // ------------------------------------------------------------
         if (client.request.parse(client.readBuffer))
         {
+            // LOG: Request parsing complete
+            std::cerr << "[PARSE-COMPLETE] method=" << client.request.getMethod()
+                      << " path=" << client.request.getPath()
+                      << " body_size=" << client.request.getBody().size() << " bytes" << std::endl;
 #ifdef DEBUG
             std::cout << GREEN << "[DEBUG] REQUEST COMPLETA. Método: " << client.request.getMethod()
                       << " | Body size: " << client.request.getBody().size() << " bytes" << RESET
@@ -784,6 +859,8 @@ void Webserv::handleClientData(int fd)
             epoll_ctl(this->epollFd, EPOLL_CTL_MOD, fd, &ev);
 
             client.readBuffer.clear();
+            client.headersLogged = false;
+            client.lastBodyLogCheckpoint = 0;
         }
     }
     catch (std::exception& e)
@@ -798,6 +875,8 @@ void Webserv::handleClientData(int fd)
 
         client.bytesSent = 0;
         client.readBuffer.clear();
+        client.headersLogged = false;
+        client.lastBodyLogCheckpoint = 0;
         // CAMBIO A MODO ESCRITURA (EPOLLOUT)
         epoll_event ev;
         std::memset(&ev, 0, sizeof(ev));

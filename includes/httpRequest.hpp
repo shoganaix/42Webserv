@@ -3,10 +3,10 @@
 /*                                                        :::      ::::::::   */
 /*   httpRequest.hpp                                    :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: kpineda- <kpineda-@student.42madrid.com    +#+  +:+       +#+        */
+/*   By: macastro <macastro@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/02/20 13:48:43 by kpineda-          #+#    #+#             */
-/*   Updated: 2026/04/05 14:15:58 by kpineda-         ###   ########.fr       */
+/*   Updated: 2026/04/10 13:39:37 by macastro         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -35,10 +35,10 @@ class HttpRequest
     size_t getContentLength() const
     {
         std::map<std::string, std::string>::const_iterator it = headers.find("Content-Length");
+        if (it == headers.end())
+            it = headers.find("content-length");
         if (it != headers.end())
-        {
             return std::atoll(it->second.c_str());
-        }
         return 0;
     }
 

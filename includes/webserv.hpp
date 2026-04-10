@@ -6,7 +6,7 @@
 /*   By: macastro <macastro@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2025/12/10 20:21:23 by msoriano          #+#    #+#             */
-/*   Updated: 2026/04/10 12:56:45 by macastro         ###   ########.fr       */
+/*   Updated: 2026/04/10 13:33:02 by macastro         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -48,6 +48,8 @@
 #include <sys/types.h>  // basic data types for sockets
 #include <sys/epoll.h>  // epoll_create1(), epoll_ctl(), epoll_wait()
 
+#define MAX_BODY_SIZE_DFLT 0
+
 class CgiHandler;
 
 struct CgiContext
@@ -68,8 +70,8 @@ struct Config
 {
     // In C++98, if you don't define a constructor, those fields can remain undefined
     Config()
-        : port(8080), max_size(0), client_max_body_size(100000000), host("0.0.0.0"), root(""),
-          index("index.html"), server_name("")
+        : port(8080), max_size(0), client_max_body_size(MAX_BODY_SIZE_DFLT), host("0.0.0.0"),
+          root(""), index("index.html"), server_name("")
     {
     }
 
@@ -94,8 +96,12 @@ struct ClientState
     bool isRequestFinished;  // <-- Añade esto para saber cuándo parar de leer
     HttpRequest request;     // <-- Donde guardarás los datos parseados
     size_t bytesSent;
+    bool headersLogged;
+    size_t lastBodyLogCheckpoint;
 
-    ClientState() : fd(-1), isRequestFinished(false) {}
+    ClientState() : fd(-1), isRequestFinished(false), headersLogged(false), lastBodyLogCheckpoint(0)
+    {
+    }
 };
 
 class Webserv
