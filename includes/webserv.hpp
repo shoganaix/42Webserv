@@ -3,10 +3,10 @@
 /*                                                        :::      ::::::::   */
 /*   webserv.hpp                                        :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: kpineda- <kpineda-@student.42madrid.com    +#+  +:+       +#+        */
+/*   By: macastro <macastro@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2025/12/10 20:21:23 by msoriano          #+#    #+#             */
-/*   Updated: 2026/04/05 23:33:11 by kpineda-         ###   ########.fr       */
+/*   Updated: 2026/04/10 12:56:45 by macastro         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -52,9 +52,10 @@ class CgiHandler;
 
 struct CgiContext
 {
-    int clientFd;
-    int inFd;
-    int outFd;
+    // Context to manage CGI execution state, including pipes and process ID
+    int clientFd; // Client socket file descriptor associated with this CGI execution
+    int inFd;     // Pipe to send request body to CGI (the CGI reads from this fd as its stdin)
+    int outFd;    // Pipe to read the response from CGI (what the CGI writes to its stdout)
     std::string bodyToWrite;
     size_t bytesWritten;
     std::string rawResponse;
@@ -86,7 +87,8 @@ struct Config
 struct ClientState
 {
     int fd;
-    Config config;           // La configuración que le toca
+    Config config; // La configuración que le toca //TODO: usar `const Config* config;` y apuntar a
+                   // la config del server correspondiente para ahorrar memoria
     std::string readBuffer;  // Lo que vamos recibiendo (por si llega por trozos)
     std::string writeBuffer; // Lo que tenemos pendiente de enviar
     bool isRequestFinished;  // <-- Añade esto para saber cuándo parar de leer
@@ -115,6 +117,7 @@ class Webserv
     void setSockets();
     bool isListeningFd(int fd);
     void acceptNewConnection(int fd);
+    void destroyCgiContext(CgiContext* ctx, bool killProcess);
     void finalizeCgiResponse(CgiContext* ctx, int fd);
     void handleCgiEvent(int fd, uint32_t events);
     void handleClientData(int fd);

@@ -6,7 +6,7 @@
 /*   By: macastro <macastro@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/01/08 18:51:13 by angnavar          #+#    #+#             */
-/*   Updated: 2026/04/09 21:45:10 by macastro         ###   ########.fr       */
+/*   Updated: 2026/04/10 13:04:40 by macastro         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -83,6 +83,36 @@
 #include "httpResponse.hpp"
 #include "cgiHandler.hpp"
 #include "pathResolver.hpp"
+
+void Webserv::destroyCgiContext(CgiContext* ctx, bool killProcess)
+{
+    if (!ctx)
+        return;
+
+    if (ctx->inFd != -1)
+    {
+        epoll_ctl(this->epollFd, EPOLL_CTL_DEL, ctx->inFd, NULL);
+        _cgiFds.erase(ctx->inFd);
+        close(ctx->inFd);
+        ctx->inFd = -1;
+    }
+
+    if (ctx->outFd != -1)
+    {
+        epoll_ctl(this->epollFd, EPOLL_CTL_DEL, ctx->outFd, NULL);
+        _cgiFds.erase(ctx->outFd);
+        close(ctx->outFd);
+        ctx->outFd = -1;
+    }
+
+    if (killProcess && ctx->pid > 0)
+        kill(ctx->pid, SIGKILL);
+
+    if (ctx->pid > 0)
+        waitpid(ctx->pid, NULL, WNOHANG);
+
+    delete ctx;
+}
 
 /*
  * - Receives path to conf at startup
@@ -405,8 +435,11 @@ HttpResponse Webserv::routeRequest(const HttpRequest& req, const Config& server)
 
             if (req.getBody().empty())
             {
-                // CLAVE: Si no hay body, cerramos el pipe de entrada YA.
-                // Esto envía un EOF al binario CGI y lo desbloquea.
+                // CLAVE: no body -> epoll delete inFd and Close pipe
+                // -> Esto es porque el CGI espera un EOF para empezar a ejecutar
+                // y si no hay body, el pipe se queda esperando a que le escriban algo que nunca
+                // llega. Al cerrar el pipe, el CGI recibe un EOF y empieza a ejecutarse
+                // directamente. Esto envía un EOF al binario CGI y lo desbloquea.
                 epoll_ctl(this->epollFd, EPOLL_CTL_DEL, ctx->inFd, NULL);
                 close(ctx->inFd);
                 _cgiFds.erase(ctx->inFd);
@@ -414,7 +447,7 @@ HttpResponse Webserv::routeRequest(const HttpRequest& req, const Config& server)
             }
             else
             {
-                // Si hay body (POST 100MB), registramos para escribir
+                // Si hay body (POST 100MB), registramos pipe de entrada para escribir
                 struct epoll_event evIn;
                 std::memset(&evIn, 0, sizeof(evIn));
                 evIn.events = EPOLLOUT;
@@ -422,13 +455,9 @@ HttpResponse Webserv::routeRequest(const HttpRequest& req, const Config& server)
                 epoll_ctl(this->epollFd, EPOLL_CTL_ADD, ctx->inFd, &evIn);
             }
 
-            // Registramos en EPOLL
+            // Registramos pipe de salida para leer la respuesta del CGI
             struct epoll_event ev;
             std::memset(&ev, 0, sizeof(ev));
-
-            ev.events = EPOLLOUT; // Para escribir el body al CGI
-            ev.data.fd = result.inFd;
-            epoll_ctl(this->epollFd, EPOLL_CTL_ADD, result.inFd, &ev);
 
             ev.events = EPOLLIN; // Para leer la respuesta del CGI
             ev.data.fd = result.outFd;
@@ -474,6 +503,7 @@ HttpResponse Webserv::routeRequest(const HttpRequest& req, const Config& server)
 
 void Webserv::finalizeCgiResponse(CgiContext* ctx, int fd)
 {
+    (void)fd;
     HttpResponse res = _cgiHandler->parseCgiOutput(ctx->rawResponse);
     if (res.getStatusCode() < 100)
         res.setStatusCode(200);
@@ -490,11 +520,7 @@ void Webserv::finalizeCgiResponse(CgiContext* ctx, int fd)
         epoll_ctl(this->epollFd, EPOLL_CTL_MOD, ctx->clientFd, &ev);
     }
 
-    epoll_ctl(this->epollFd, EPOLL_CTL_DEL, fd, NULL);
-    _cgiFds.erase(fd);
-    close(fd);
-    waitpid(ctx->pid, NULL, WNOHANG);
-    delete ctx;
+    destroyCgiContext(ctx, false);
 }
 
 void Webserv::handleCgiEvent(int fd, uint32_t events)
@@ -570,11 +596,7 @@ void Webserv::handleCgiEvent(int fd, uint32_t events)
             }
 
             // Limpieza final
-            epoll_ctl(this->epollFd, EPOLL_CTL_DEL, fd, NULL);
-            _cgiFds.erase(fd);
-            close(fd);
-            waitpid(ctx->pid, NULL, WNOHANG);
-            delete ctx;
+            destroyCgiContext(ctx, false);
         }
     }
 }
@@ -870,21 +892,35 @@ void Webserv::handleClientWrite(int fd)
 
 void Webserv::closeConnection(int fd)
 {
+    std::vector<CgiContext*> contextsToDestroy;
+
     std::map<int, CgiContext*>::iterator it = _cgiFds.begin();
     while (it != _cgiFds.end())
     {
         if (it->second->clientFd == fd)
         {
-            int cgiFd = it->first;
-            kill(it->second->pid, SIGKILL);
-            epoll_ctl(this->epollFd, EPOLL_CTL_DEL, cgiFd, NULL);
-            close(cgiFd);
-            delete it->second;
+            CgiContext* ctx = it->second;
+            bool alreadyQueued = false;
+            for (size_t i = 0; i < contextsToDestroy.size(); ++i)
+            {
+                if (contextsToDestroy[i] == ctx)
+                {
+                    alreadyQueued = true;
+                    break;
+                }
+            }
+            if (!alreadyQueued)
+                contextsToDestroy.push_back(ctx);
+
             _cgiFds.erase(it++);
         }
         else
             ++it;
     }
+
+    for (size_t i = 0; i < contextsToDestroy.size(); ++i)
+        destroyCgiContext(contextsToDestroy[i], true);
+
     epoll_ctl(this->epollFd, EPOLL_CTL_DEL, fd, NULL);
     this->clients.erase(fd);
     close(fd);
