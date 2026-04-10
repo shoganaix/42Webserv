@@ -576,27 +576,9 @@ void Webserv::handleCgiEvent(int fd, uint32_t events)
         }
         else if (n == 0 || (n < 0 && errno != EAGAIN && errno != EWOULDBLOCK))
         {
-            // El CGI terminó: enviamos la respuesta acumulada al cliente
             std::cout << GREEN << "[SUCCESS] CGI finalizado. Enviando respuesta..." << RESET
                       << std::endl;
-
-            // Aquí pones tu lógica de parsear y enviar (o llamar a tu finalizeCgiResponse)
-            HttpResponse res = _cgiHandler->parseCgiOutput(ctx->rawResponse);
-            if (res.getStatusCode() < 100)
-                res.setStatusCode(200);
-
-            if (this->clients.count(ctx->clientFd))
-            {
-                this->clients[ctx->clientFd].writeBuffer = res.toString(false);
-                this->clients[ctx->clientFd].bytesSent = 0;
-                struct epoll_event ev = {};
-                ev.events = EPOLLOUT;
-                ev.data.fd = ctx->clientFd;
-                epoll_ctl(this->epollFd, EPOLL_CTL_MOD, ctx->clientFd, &ev);
-            }
-
-            // Limpieza final
-            destroyCgiContext(ctx, false);
+            finalizeCgiResponse(ctx, fd);
         }
     }
 }
