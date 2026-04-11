@@ -6,7 +6,7 @@
 /*   By: macastro <macastro@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/01/08 18:51:13 by angnavar          #+#    #+#             */
-/*   Updated: 2026/04/11 15:07:49 by macastro         ###   ########.fr       */
+/*   Updated: 2026/04/11 19:39:36 by macastro         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -826,6 +826,39 @@ void Webserv::handleClientData(int fd)
                     }
                 }
             }
+
+            bool requestComplete = true;
+            if (headers.count("transfer-encoding"))
+            {
+                std::string t_encod = headers["transfer-encoding"];
+                for (size_t i = 0; i < t_encod.size(); ++i)
+                    t_encod[i] = std::tolower(static_cast<unsigned char>(t_encod[i]));
+
+                // Si es chunked, el cuerpo puede ser de cualquier tamaño, (Content-Length no se usa
+                // en chunked) el buffer debe terminar con "0\r\n\r\n" para considerarlo completo
+                if (t_encod.find("chunked") != std::string::npos)
+                {
+                    if (client.readBuffer.size() < 5 ||
+                        client.readBuffer.compare(client.readBuffer.size() - 5, 5, "0\r\n\r\n") !=
+                            0)
+                        requestComplete = false;
+                }
+            }
+
+            if (headers.count("content-length"))
+            {
+                char* endptr = NULL;
+                unsigned long declaredLen =
+                    std::strtoul(headers["content-length"].c_str(), &endptr, 10);
+                if (*headers["content-length"].c_str() == '\0' || (endptr && *endptr != '\0'))
+                    throw std::runtime_error("Invalid Content-Length value");
+
+                if (bodyAvailable < declaredLen)
+                    requestComplete = false;
+            }
+
+            if (!requestComplete)
+                return;
         }
         // ------------------------------------------------------------
         if (client.request.parse(client.readBuffer))
