@@ -6,7 +6,7 @@
 /*   By: macastro <macastro@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/03/02 18:05:15 by root              #+#    #+#             */
-/*   Updated: 2026/04/11 14:31:50 by macastro         ###   ########.fr       */
+/*   Updated: 2026/04/11 15:03:35 by macastro         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -222,7 +222,7 @@ CgiResult CgiHandler::execute(const HttpRequest& req, const CgiTarget& target,
             envS.push_back(it->first + "=" + it->second);
 
         std::vector<char*> envp = vecToCharPtr(envS);
-        logDebug(GREEN, "[CGI] Executing CGI script... %s", argv[0]);
+        logDebug(GREEN, "[CGI] Executing CGI script... " + std::string(argv[0]));
         if (access(argv[0], X_OK) != 0)
         {
             std::cerr << "[ERROR] CGI: Binario no encontrado o sin permisos: " << argv[0]

@@ -6,7 +6,7 @@
 /*   By: macastro <macastro@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/10 00:00:00 by usuario           #+#    #+#             */
-/*   Updated: 2026/04/11 13:40:44 by macastro         ###   ########.fr       */
+/*   Updated: 2026/04/11 15:02:35 by macastro         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -26,31 +26,22 @@ void printTimestamped(const std::string& color, const std::string& msg)
     std::cout << color << "[" << timestamp << "] " << msg << RESET << std::endl;
 }
 
-void formatAndPrint(const std::string& color, const char* fmt, va_list args)
+void logDebug(const std::string& msg)
 {
-    char msg[LOG_BUFFER_SIZE] = {0};
-    std::vsnprintf(msg, sizeof(msg), fmt, args);
+    if (!DEBUG)
+        return;
+
+    printTimestamped("", msg);
+}
+
+void logDebug(const std::string& color, const std::string& msg)
+{
+    if (!DEBUG)
+        return;
+
     printTimestamped(color, msg);
 }
 
-void logDebug(const char* fmt, ...)
-{
-    if (!DEBUG)
-        return;
+void logInfo(const std::string& msg) { printTimestamped(BLUE, msg); }
 
-    va_list args;
-    va_start(args, fmt);
-    formatAndPrint("", fmt, args);
-    va_end(args);
-}
-
-void logDebug(const std::string& color, const char* fmt, ...)
-{
-    if (!DEBUG)
-        return;
-
-    va_list args;
-    va_start(args, fmt);
-    formatAndPrint(color, fmt, args);
-    va_end(args);
-}
+void logInfo(const std::string& color, const std::string& msg) { printTimestamped(color, msg); }

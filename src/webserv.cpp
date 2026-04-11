@@ -6,7 +6,7 @@
 /*   By: macastro <macastro@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/01/08 18:51:13 by angnavar          #+#    #+#             */
-/*   Updated: 2026/04/11 14:35:09 by macastro         ###   ########.fr       */
+/*   Updated: 2026/04/11 15:07:49 by macastro         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -288,8 +288,8 @@ void Webserv::acceptNewConnection(int listeningFd)
         return;
     }
 
-    std::cout << YELLOW << "\nNew connection accepted on FD: " << clientFd
-              << " for server: " << newClient.config.server_name << RESET << std::endl;
+    logInfo(GREEN, "New connection accepted on FD: " + to_string(clientFd) +
+                       " for server: " + newClient.config.server_name);
 }
 
 /*
@@ -347,7 +347,7 @@ HttpResponse Webserv::routeRequest(const HttpRequest& req, const Config& server)
     // -------------- DEBUG: ------------------
     std::string routeMsg = "[ROUTE] method=" + req.getMethod() + " path=" + req.getPath() +
                            " body_size=" + to_string(req.getBody().size());
-    logDebug(CYAN, routeMsg.c_str());
+    logDebug(CYAN, routeMsg);
     // ----------------------------------------
     // 1. Match location algorythm
     const Location* loc = matchLocation(server, req.getPath());
@@ -372,7 +372,7 @@ HttpResponse Webserv::routeRequest(const HttpRequest& req, const Config& server)
     {
         std::string matchedMsg = "[ROUTE] matched location path=" + loc->path +
                                  " client_max_body_size=" + to_string(loc->client_max_body_size);
-        logDebug(GREEN, matchedMsg.c_str());
+        logDebug(GREEN, matchedMsg);
     }
     // ----------------------------------------
     if (!loc->redir.empty())
@@ -386,7 +386,7 @@ HttpResponse Webserv::routeRequest(const HttpRequest& req, const Config& server)
         std::string bodyLimitMsg = "[ROUTE] body size exceeds client_max_body_size limit=" +
                                    to_string(loc->client_max_body_size) +
                                    " actual=" + to_string(req.getBody().length());
-        logDebug(RED, bodyLimitMsg.c_str());
+        logDebug(RED, bodyLimitMsg);
         res.setStatusCode(413);
         res.setBody("<html><body><h1>413 Payload Too Large</h1></body></html>");
         res.addHeader("Content-Type", "text/html");
@@ -396,7 +396,7 @@ HttpResponse Webserv::routeRequest(const HttpRequest& req, const Config& server)
     // 5. Resolve real path (FILESYSTEM)
     ResolvedPath resolved = resolvePath(*loc, req.getPath());
     std::string resolvedMsg = "[ROUTE] resolved path=" + resolved.fsPath;
-    logDebug(BLUE, resolvedMsg.c_str());
+    logDebug(BLUE, resolvedMsg);
 
     // 6. Check allowed methods.
     // CGI gets priority so POST to .bla works even if the location is GET-only.
@@ -454,12 +454,10 @@ HttpResponse Webserv::routeRequest(const HttpRequest& req, const Config& server)
             ctx->inFd = result.inFd;
             ctx->outFd = result.outFd;
             logDebug(GREEN,
-                     ("[ROUTE] 1 CGI executed, setting up context and epoll events. Client FD: " +
-                      to_string(ctx->clientFd) + " CGI PID: " + to_string(ctx->pid))
-                         .c_str());
-            logDebug(GREEN, ("[ROUTE] CGI inFd: " + to_string(ctx->inFd) +
-                             " outFd: " + to_string(ctx->outFd))
-                                .c_str());
+                     "[ROUTE] 1 CGI executed, setting up context and epoll events. Client FD: " +
+                         to_string(ctx->clientFd) + " CGI PID: " + to_string(ctx->pid));
+            logDebug(GREEN, "[ROUTE] 2 CGI inFd: " + to_string(ctx->inFd) +
+                                " outFd: " + to_string(ctx->outFd));
             // Mapeamos ambos FDs al mismo contexto
             this->_cgiFds[result.inFd] = ctx;
             this->_cgiFds[result.outFd] = ctx;
@@ -607,8 +605,7 @@ void Webserv::handleCgiEvent(int fd, uint32_t events)
         }
         else if (n == 0 || (n < 0 && errno != EAGAIN && errno != EWOULDBLOCK))
         {
-            logDebug(GREEN, "%s",
-                     (std::string("[CGI] Output completo:\n") + ctx->rawResponse).c_str());
+            logDebug(GREEN, std::string("[CGI] Output completo:\n") + ctx->rawResponse);
             finalizeCgiResponse(ctx, fd);
         }
     }
@@ -718,7 +715,7 @@ void Webserv::handleClientData(int fd)
                 std::string headersMsg = "[HEADERS] FD=" + to_string(fd) + " method=" + method +
                                          " path=" + path + " content-length=" + cl +
                                          " transfer-encoding=" + te;
-                logDebug(BLUE, headersMsg.c_str());
+                logDebug(BLUE, headersMsg);
                 client.headersLogged = true;
             }
 
@@ -729,7 +726,7 @@ void Webserv::handleClientData(int fd)
                 std::string bodyProgressMsg = "[BODY-PROGRESS] FD=" + to_string(fd) +
                                               " received_body=" + to_string(bodyAvailable) +
                                               " bytes";
-                logDebug(CYAN, bodyProgressMsg.c_str());
+                logDebug(CYAN, bodyProgressMsg);
             }
 
             const Location* loc = NULL;
@@ -756,7 +753,7 @@ void Webserv::handleClientData(int fd)
                 std::string earlyBodyMsg =
                     "[EARLY] returning 413 body_received=" + to_string(bodyAvailable) +
                     " limit=" + to_string(maxBody);
-                logDebug(RED, earlyBodyMsg.c_str());
+                logDebug(RED, earlyBodyMsg);
                 HttpResponse res;
                 res.setStatusCode(413);
                 res.setBody("<html><body><h1>413 Payload Too Large</h1></body></html>");
@@ -792,7 +789,7 @@ void Webserv::handleClientData(int fd)
                                            " declared_content-length=" + to_string(declaredLen) +
                                            " body_available=" + to_string(bodyAvailable) +
                                            " waiting_for=" + to_string(waitingFor) + " bytes";
-                logDebug(GREEN, bodyCheckMsg.c_str());
+                logDebug(GREEN, bodyCheckMsg);
 
                 if (loc)
                 {
@@ -802,7 +799,7 @@ void Webserv::handleClientData(int fd)
                         std::string earlyLenMsg = std::string("[EARLY] returning 413") +
                                                   " declaredLen=" + to_string(declaredLen) +
                                                   " limit=" + to_string(loc->client_max_body_size);
-                        logDebug(RED, earlyLenMsg.c_str());
+                        logDebug(RED, earlyLenMsg);
                         // Build 413 Payload Too Large response
                         HttpResponse res;
                         res.setStatusCode(413);
@@ -834,13 +831,14 @@ void Webserv::handleClientData(int fd)
         if (client.request.parse(client.readBuffer))
         {
             // LOG: Request parsing complete
-            std::cerr << "[PARSE-COMPLETE] method=" << client.request.getMethod()
-                      << " path=" << client.request.getPath()
-                      << " body_size=" << client.request.getBody().size() << " bytes" << std::endl;
+            logInfo(GREEN, "Request parsed successfully for FD: " + to_string(fd) + " Method: " +
+                               client.request.getMethod() + " Path: " + client.request.getPath() +
+                               " Body size: " + to_string(client.request.getBody().size()) +
+                               " bytes");
             std::string parseCompleteMsg =
                 "[DEBUG] REQUEST COMPLETA. Método: " + client.request.getMethod() +
                 " | Body size: " + to_string(client.request.getBody().size()) + " bytes";
-            logDebug(BLUE, parseCompleteMsg.c_str());
+            logDebug(BLUE, parseCompleteMsg);
 
             Config* server = &this->clients[fd].config;
 
@@ -855,7 +853,7 @@ void Webserv::handleClientData(int fd)
             }
             // -------------- DEBUG: ------------------
             std::string handleMsg = "[HANDLE] response status=" + to_string(res.getStatusCode());
-            logDebug(BLUE, handleMsg.c_str());
+            logDebug(BLUE, handleMsg);
             // -----------------------------------------
             client.writeBuffer = res.toString(client.request.getMethod() == "HEAD");
             client.bytesSent = 0;
@@ -916,11 +914,11 @@ void Webserv::handleClientWrite(int fd)
 
     if (client.writeBuffer.empty() || client.bytesSent >= client.writeBuffer.size())
     {
-        logDebug(GREEN, "[WRITE-COMPLETE] FD %d, total bytes sent: %zu", fd, client.bytesSent);
-        logDebug(YELLOW,
-                 "[DEBUG] No hay más datos que enviar o índice de bytes enviados supera el tamaño "
-                 "del buffer. FD: %d",
-                 fd);
+        logDebug(GREEN, std::string("[WRITE-COMPLETE] FD ") + to_string(fd) +
+                            ", total bytes sent: " + to_string(client.bytesSent));
+        logDebug(YELLOW, std::string("[DEBUG] No hay más datos que enviar o índice de bytes "
+                                     "enviados supera el tamaño ") +
+                             "del buffer. FD: " + to_string(fd));
         client.bytesSent = 0;
         client.writeBuffer.clear();
         struct epoll_event ev;
@@ -939,8 +937,9 @@ void Webserv::handleClientWrite(int fd)
     if (sent > 0)
     {
         client.bytesSent += sent;
-        logDebug(GREEN, "[WRITE] Sent %zd bytes to FD %d, total sent: %zu/%zu", sent, fd,
-                 client.bytesSent, client.writeBuffer.size());
+        logDebug(GREEN, std::string("[WRITE] Sent ") + to_string(sent) + " bytes to FD " +
+                            to_string(fd) + ", total sent: " + to_string(client.bytesSent) + "/" +
+                            to_string(client.writeBuffer.size()));
     }
     else if (sent < 0)
     {
@@ -955,7 +954,7 @@ void Webserv::handleClientWrite(int fd)
     // FINALIZACIÓN:
     if (client.bytesSent >= client.writeBuffer.size())
     {
-        logDebug(GREEN, "[SUCCESS] Respuesta enviada completa al FD %d", fd);
+        logDebug(GREEN, std::string("[SUCCESS] Respuesta enviada completa al FD ") + to_string(fd));
         client.writeBuffer.clear();
         client.bytesSent = 0;
 
