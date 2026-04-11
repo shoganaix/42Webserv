@@ -6,7 +6,7 @@
 /*   By: macastro <macastro@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2025/12/10 20:21:26 by msoriano          #+#    #+#             */
-/*   Updated: 2026/04/09 20:57:33 by macastro         ###   ########.fr       */
+/*   Updated: 2026/04/11 13:43:01 by macastro         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -55,7 +55,7 @@ int main(int argc, char** argv)
 
     if (argc != 1 && argc != 2)
     {
-        Logger::logMsg(RED, CONSOLE_OUTPUT, "ERROR:\n- ./webserv\n- ./webserv <config_file>\n");
+        std::cerr << RED << "ERROR:\n- ./webserv\n- ./webserv <config_file>\n" << RESET;
         return (1);
     }
     const std::string configFile = (argc == 1 ? "configs/default.conf" : argv[1]);
@@ -69,7 +69,7 @@ int main(int argc, char** argv)
     }
     catch (const std::exception& e)
     {
-        std::cerr << RED << "Error: " << RESET << e.what() << "\n";
+        std::cerr << RED << "Error: " << e.what() << RESET << "\n";
         return (1);
     }
 }

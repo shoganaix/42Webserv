@@ -6,7 +6,7 @@
 /*   By: macastro <macastro@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/01/08 18:51:13 by angnavar          #+#    #+#             */
-/*   Updated: 2026/04/10 14:32:12 by macastro         ###   ########.fr       */
+/*   Updated: 2026/04/11 12:43:32 by macastro         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -287,7 +287,7 @@ void Webserv::acceptNewConnection(int listeningFd)
         return;
     }
 
-    std::cout << YELLOW << "New connection accepted on FD: " << clientFd
+    std::cout << YELLOW << "\nNew connection accepted on FD: " << clientFd
               << " for server: " << newClient.config.server_name << RESET << std::endl;
 }
 

@@ -21,6 +21,7 @@ SRC =  src/main.cpp \
 		src/httpResponse.cpp \
 		src/httpRequest.cpp \
 		src/cgiHandler.cpp \
+		src/logger.cpp \
 		src/utils.cpp \
 		src/debug.cpp \
 
