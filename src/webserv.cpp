@@ -6,7 +6,7 @@
 /*   By: macastro <macastro@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/01/08 18:51:13 by angnavar          #+#    #+#             */
-/*   Updated: 2026/04/11 14:08:45 by macastro         ###   ########.fr       */
+/*   Updated: 2026/04/11 14:35:09 by macastro         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -453,10 +453,13 @@ HttpResponse Webserv::routeRequest(const HttpRequest& req, const Config& server)
             ctx->pid = result.pid;
             ctx->inFd = result.inFd;
             ctx->outFd = result.outFd;
-#ifdef DEBUG
-            std::cout << "DEBUG: Cliente FD: " << req.getClientFd() << " | Pipe In: " << result.inFd
-                      << " | Pipe Out: " << result.outFd << std::endl;
-#endif
+            logDebug(GREEN,
+                     ("[ROUTE] 1 CGI executed, setting up context and epoll events. Client FD: " +
+                      to_string(ctx->clientFd) + " CGI PID: " + to_string(ctx->pid))
+                         .c_str());
+            logDebug(GREEN, ("[ROUTE] CGI inFd: " + to_string(ctx->inFd) +
+                             " outFd: " + to_string(ctx->outFd))
+                                .c_str());
             // Mapeamos ambos FDs al mismo contexto
             this->_cgiFds[result.inFd] = ctx;
             this->_cgiFds[result.outFd] = ctx;
@@ -826,37 +829,6 @@ void Webserv::handleClientData(int fd)
                     }
                 }
             }
-
-            // bool requestComplete = true;
-            // if (headers.count("transfer-encoding"))
-            // {
-            //     std::string te = headers["transfer-encoding"];
-            //     for (size_t i = 0; i < te.size(); ++i)
-            //         te[i] = std::tolower(static_cast<unsigned char>(te[i]));
-
-            //     if (te.find("chunked") != std::string::npos)
-            //     {
-            //         size_t finalChunk = client.readBuffer.rfind("0\r\n\r\n");
-            //         if (finalChunk == std::string::npos || finalChunk + 5 !=
-            //         client.readBuffer.size())
-            //             requestComplete = false;
-            //     }
-            // }
-
-            // if (headers.count("content-length"))
-            // {
-            //     char* endptr = NULL;
-            //     unsigned long declaredLen =
-            //         std::strtoul(headers["content-length"].c_str(), &endptr, 10);
-            //     if (*headers["content-length"].c_str() == '\0' || (endptr && *endptr != '\0'))
-            //         throw std::runtime_error("Invalid Content-Length value");
-
-            //     if (bodyAvailable < declaredLen)
-            //         requestComplete = false;
-            // }
-
-            // if (!requestComplete)
-            //     return;
         }
         // ------------------------------------------------------------
         if (client.request.parse(client.readBuffer))
@@ -877,11 +849,8 @@ void Webserv::handleClientData(int fd)
 
             if (res.getIsCgi())
             {
-#ifdef DEBUG
-                std::cout << PURPLE
-                          << "[DEBUG] Petición CGI detectada. Delegando a handleCgiEvent..."
-                          << RESET << std::endl;
-#endif
+                logDebug(PURPLE, "[ROUTE] request routed to CGI handler, waiting for CGI "
+                                 "output...handleCgiEvent will take care of the rest.");
                 return;
             }
             // -------------- DEBUG: ------------------
@@ -947,10 +916,11 @@ void Webserv::handleClientWrite(int fd)
 
     if (client.writeBuffer.empty() || client.bytesSent >= client.writeBuffer.size())
     {
-#ifdef DEBUG
-        std::cout << YELLOW << "[DEBUG] Nada que enviar o índice corrupto en FD " << fd << RESET
-                  << std::endl;
-#endif
+        logDebug(GREEN, "[WRITE-COMPLETE] FD %d, total bytes sent: %zu", fd, client.bytesSent);
+        logDebug(YELLOW,
+                 "[DEBUG] No hay más datos que enviar o índice de bytes enviados supera el tamaño "
+                 "del buffer. FD: %d",
+                 fd);
         client.bytesSent = 0;
         client.writeBuffer.clear();
         struct epoll_event ev;
@@ -969,9 +939,8 @@ void Webserv::handleClientWrite(int fd)
     if (sent > 0)
     {
         client.bytesSent += sent;
-#ifdef DEBUG
-        std::cout << "[DEBUG] FD " << fd << " envió " << sent << " bytes." << std::endl;
-#endif
+        logDebug(GREEN, "[WRITE] Sent %zd bytes to FD %d, total sent: %zu/%zu", sent, fd,
+                 client.bytesSent, client.writeBuffer.size());
     }
     else if (sent < 0)
     {

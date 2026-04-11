@@ -6,7 +6,7 @@
 /*   By: macastro <macastro@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2025/12/10 20:21:26 by msoriano          #+#    #+#             */
-/*   Updated: 2026/04/11 13:43:01 by macastro         ###   ########.fr       */
+/*   Updated: 2026/04/11 14:21:20 by macastro         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -32,8 +32,6 @@
 #include "../includes/configParser.hpp"
 
 #include "../includes/debug.hpp"
-#ifdef DEBUG
-#endif
 
 void run_tests()
 {

@@ -3,15 +3,16 @@
 /*                                                        :::      ::::::::   */
 /*   cgiHandler.cpp                                     :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: angnavar <angnavar@student.42madrid.com    +#+  +:+       +#+        */
+/*   By: macastro <macastro@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/03/02 18:05:15 by root              #+#    #+#             */
-/*   Updated: 2026/04/06 10:21:39 by angnavar         ###   ########.fr       */
+/*   Updated: 2026/04/11 14:31:50 by macastro         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
 #include "../includes/cgiHandler.hpp"
 #include "../includes/utils.hpp"
+#include "../includes/logger.hpp"
 
 /*-----------------------------------------------------------------------
  *                          🧩CGI HANDLER🧩
@@ -221,9 +222,7 @@ CgiResult CgiHandler::execute(const HttpRequest& req, const CgiTarget& target,
             envS.push_back(it->first + "=" + it->second);
 
         std::vector<char*> envp = vecToCharPtr(envS);
-#ifdef DEBUG
-        std::cout << "[DEBUG] Intentando ejecutar: " << argv[0] << std::endl;
-#endif
+        logDebug(GREEN, "[CGI] Executing CGI script... %s", argv[0]);
         if (access(argv[0], X_OK) != 0)
         {
             std::cerr << "[ERROR] CGI: Binario no encontrado o sin permisos: " << argv[0]
