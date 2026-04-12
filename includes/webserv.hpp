@@ -6,7 +6,7 @@
 /*   By: macastro <macastro@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2025/12/10 20:21:23 by msoriano          #+#    #+#             */
-/*   Updated: 2026/04/10 13:33:02 by macastro         ###   ########.fr       */
+/*   Updated: 2026/04/12 17:50:15 by macastro         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -58,12 +58,12 @@ struct CgiContext
     int clientFd; // Client socket file descriptor associated with this CGI execution
     int inFd;     // Pipe to send request body to CGI (the CGI reads from this fd as its stdin)
     int outFd;    // Pipe to read the response from CGI (what the CGI writes to its stdout)
-    std::string bodyToWrite;
+    const std::string* bodyToWrite;
     size_t bytesWritten;
     std::string rawResponse;
     pid_t pid;
 
-    CgiContext() : clientFd(-1), inFd(-1), outFd(-1), bytesWritten(0), pid(-1) {}
+    CgiContext() : clientFd(-1), inFd(-1), outFd(-1), bodyToWrite(NULL), bytesWritten(0), pid(-1) {}
 };
 
 struct Config
@@ -89,8 +89,7 @@ struct Config
 struct ClientState
 {
     int fd;
-    Config config; // La configuración que le toca //TODO: usar `const Config* config;` y apuntar a
-                   // la config del server correspondiente para ahorrar memoria
+    Config config;           // La configuración que le toca
     std::string readBuffer;  // Lo que vamos recibiendo (por si llega por trozos)
     std::string writeBuffer; // Lo que tenemos pendiente de enviar
     bool isRequestFinished;  // <-- Añade esto para saber cuándo parar de leer
@@ -98,9 +97,36 @@ struct ClientState
     size_t bytesSent;
     bool headersLogged;
     size_t lastBodyLogCheckpoint;
+    bool requestMetaParsed;
+    size_t requestHeadersEnd;
+    std::string requestMethod;
+    std::string requestPath;
+    std::string requestQuery;
+    std::string requestVersion;
+    std::map<std::string, std::string> requestHeaders;
+    bool requestHasContentLength;
+    size_t requestBodyLength;
+    bool requestIsChunked;
 
-    ClientState() : fd(-1), isRequestFinished(false), headersLogged(false), lastBodyLogCheckpoint(0)
+    ClientState()
+        : fd(-1), isRequestFinished(false), headersLogged(false), lastBodyLogCheckpoint(0),
+          requestMetaParsed(false), requestHeadersEnd(0), requestHasContentLength(false),
+          requestBodyLength(0), requestIsChunked(false)
     {
+    }
+
+    void resetRequestCache()
+    {
+        requestMetaParsed = false;
+        requestHeadersEnd = 0;
+        requestMethod.clear();
+        requestPath.clear();
+        requestQuery.clear();
+        requestVersion.clear();
+        requestHeaders.clear();
+        requestHasContentLength = false;
+        requestBodyLength = 0;
+        requestIsChunked = false;
     }
 };
 

@@ -6,7 +6,7 @@
 /*   By: macastro <macastro@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/02/20 13:48:43 by kpineda-          #+#    #+#             */
-/*   Updated: 2026/04/10 13:39:37 by macastro         ###   ########.fr       */
+/*   Updated: 2026/04/12 17:44:49 by macastro         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -25,6 +25,14 @@ class HttpRequest
     bool parse(const std::string& rawRequest);
     void setClientFd(int fd) { _clientFd = fd; }
     int getClientFd() const { return _clientFd; }
+    void setMethod(const std::string& value) { method = value; }
+    void setPath(const std::string& value) { path = value; }
+    void setVersion(const std::string& value) { version = value; }
+    void setQuery(const std::string& value) { query = value; }
+    void setHeaders(const std::map<std::string, std::string>& value) { headers = value; }
+    void setBody(const std::string& value) { body = value; }
+    void swapBody(std::string& value) { body.swap(value); }
+    void clearBody() { std::string().swap(body); }
 
     const std::string& getMethod() const;
     const std::string& getPath() const;

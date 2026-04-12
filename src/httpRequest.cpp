@@ -6,15 +6,13 @@
 /*   By: macastro <macastro@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/03/03 21:07:34 by root              #+#    #+#             */
-/*   Updated: 2026/04/10 13:45:35 by macastro         ###   ########.fr       */
+/*   Updated: 2026/04/12 17:44:49 by macastro         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
 #include "../includes/httpRequest.hpp"
 #include <iostream>
 
-/* --------------------------GETTERS--------------------------
- */
 const std::string& HttpRequest::getMethod() const { return method; }
 const std::string& HttpRequest::getPath() const { return path; }
 const std::string& HttpRequest::getBody() const { return body; }
@@ -169,15 +167,6 @@ bool HttpRequest::parseBody(const std::string& raw, size_t bodyStart)
             throw(std::runtime_error("Invalid Content-Length value"));
 
         expectedBodyLen = static_cast<size_t>(n);
-    }
-
-    // LOG: Trace body parsing wait
-    if (expectedBodyLen > 1000000)
-    {
-        size_t available = raw.size() - bodyStart;
-        std::cerr << "[PARSE-BODY-WAIT] expected=" << expectedBodyLen << " available=" << available
-                  << " waiting_for=" << (expectedBodyLen - available) << " bytes ("
-                  << (100.0 * available / expectedBodyLen) << "%)" << std::endl;
     }
 
     if (raw.size() < bodyStart + expectedBodyLen)

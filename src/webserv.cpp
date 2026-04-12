@@ -6,7 +6,7 @@
 /*   By: macastro <macastro@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/01/08 18:51:13 by angnavar          #+#    #+#             */
-/*   Updated: 2026/04/11 19:39:36 by macastro         ###   ########.fr       */
+/*   Updated: 2026/04/12 17:54:55 by macastro         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -288,8 +288,8 @@ void Webserv::acceptNewConnection(int listeningFd)
         return;
     }
 
-    logInfo(GREEN, "New connection accepted on FD: " + to_string(clientFd) +
-                       " for server: " + newClient.config.server_name);
+    logDebug(GREEN, "New connection accepted on FD: " + to_string(clientFd) +
+                        " for server: " + newClient.config.server_name);
 }
 
 /*
@@ -345,9 +345,12 @@ HttpResponse Webserv::routeRequest(const HttpRequest& req, const Config& server)
 {
     HttpResponse res;
     // -------------- DEBUG: ------------------
-    std::string routeMsg = "[ROUTE] method=" + req.getMethod() + " path=" + req.getPath() +
-                           " body_size=" + to_string(req.getBody().size());
-    logDebug(CYAN, routeMsg);
+    if (DEBUG)
+    {
+        std::string routeMsg = "[ROUTE] method=" + req.getMethod() + " path=" + req.getPath() +
+                               " body_size=" + to_string(req.getBody().size());
+        logDebug(CYAN, routeMsg);
+    }
     // ----------------------------------------
     // 1. Match location algorythm
     const Location* loc = matchLocation(server, req.getPath());
@@ -370,9 +373,13 @@ HttpResponse Webserv::routeRequest(const HttpRequest& req, const Config& server)
     // -------------- DEBUG: ------------------
     else
     {
-        std::string matchedMsg = "[ROUTE] matched location path=" + loc->path +
-                                 " client_max_body_size=" + to_string(loc->client_max_body_size);
-        logDebug(GREEN, matchedMsg);
+        if (DEBUG)
+        {
+            std::string matchedMsg =
+                "[ROUTE] matched location path=" + loc->path +
+                " client_max_body_size=" + to_string(loc->client_max_body_size);
+            logDebug(GREEN, matchedMsg);
+        }
     }
     // ----------------------------------------
     if (!loc->redir.empty())
@@ -383,10 +390,13 @@ HttpResponse Webserv::routeRequest(const HttpRequest& req, const Config& server)
     // 4. Check allowed client_max_body_size
     if (loc->client_max_body_size > 0 && req.getBody().length() > loc->client_max_body_size)
     {
-        std::string bodyLimitMsg = "[ROUTE] body size exceeds client_max_body_size limit=" +
-                                   to_string(loc->client_max_body_size) +
-                                   " actual=" + to_string(req.getBody().length());
-        logDebug(RED, bodyLimitMsg);
+        if (DEBUG)
+        {
+            std::string bodyLimitMsg = "[ROUTE] body size exceeds client_max_body_size limit=" +
+                                       to_string(loc->client_max_body_size) +
+                                       " actual=" + to_string(req.getBody().length());
+            logDebug(RED, bodyLimitMsg);
+        }
         res.setStatusCode(413);
         res.setBody("<html><body><h1>413 Payload Too Large</h1></body></html>");
         res.addHeader("Content-Type", "text/html");
@@ -395,8 +405,11 @@ HttpResponse Webserv::routeRequest(const HttpRequest& req, const Config& server)
 
     // 5. Resolve real path (FILESYSTEM)
     ResolvedPath resolved = resolvePath(*loc, req.getPath());
-    std::string resolvedMsg = "[ROUTE] resolved path=" + resolved.fsPath;
-    logDebug(BLUE, resolvedMsg);
+    if (DEBUG)
+    {
+        std::string resolvedMsg = "[ROUTE] resolved path=" + resolved.fsPath;
+        logDebug(BLUE, resolvedMsg);
+    }
 
     // 6. Check allowed methods.
     // CGI gets priority so POST to .bla works even if the location is GET-only.
@@ -448,7 +461,7 @@ HttpResponse Webserv::routeRequest(const HttpRequest& req, const Config& server)
             // Creamos el contexto para que handleCgiEvent sepa qué hacer
             CgiContext* ctx = new CgiContext();
             ctx->clientFd = req.getClientFd(); // Asegúrate de haberlo seteado antes
-            ctx->bodyToWrite = req.getBody();
+            ctx->bodyToWrite = &req.getBody();
             ctx->bytesWritten = 0;
             ctx->pid = result.pid;
             ctx->inFd = result.inFd;
@@ -462,7 +475,7 @@ HttpResponse Webserv::routeRequest(const HttpRequest& req, const Config& server)
             this->_cgiFds[result.inFd] = ctx;
             this->_cgiFds[result.outFd] = ctx;
 
-            if (req.getBody().empty())
+            if (!ctx->bodyToWrite || ctx->bodyToWrite->empty())
             {
                 // CLAVE: no body -> epoll delete inFd and Close pipe
                 // -> Esto es porque el CGI espera un EOF para empezar a ejecutar
@@ -562,15 +575,18 @@ void Webserv::handleCgiEvent(int fd, uint32_t events)
     // --- 1. ESCRITURA AL CGI (Hacia el inFd / Pipe 8) ---
     if (fd == ctx->inFd && (events & EPOLLOUT))
     {
-        if (ctx->bytesWritten < ctx->bodyToWrite.size())
+        if (!ctx->bodyToWrite)
+            return;
+
+        const std::string& body = *(ctx->bodyToWrite);
+        if (ctx->bytesWritten < body.size())
         {
-            ssize_t n = write(fd, ctx->bodyToWrite.data() + ctx->bytesWritten,
-                              ctx->bodyToWrite.size() - ctx->bytesWritten);
+            ssize_t n = write(fd, body.data() + ctx->bytesWritten, body.size() - ctx->bytesWritten);
             if (n > 0)
             {
                 ctx->bytesWritten += n;
             }
-            else if (n < 0 && errno != EAGAIN && errno != EWOULDBLOCK)
+            else
             {
                 // AQUÍ PARAMOS LAS 'E': Si falla, sacamos el FD de epoll
                 epoll_ctl(this->epollFd, EPOLL_CTL_DEL, fd, NULL);
@@ -582,12 +598,16 @@ void Webserv::handleCgiEvent(int fd, uint32_t events)
         }
 
         // Cierre normal al terminar los 100MB
-        if (ctx->inFd != -1 && ctx->bytesWritten >= ctx->bodyToWrite.size())
+        if (ctx->inFd != -1 && ctx->bytesWritten >= body.size())
         {
             epoll_ctl(this->epollFd, EPOLL_CTL_DEL, fd, NULL);
             _cgiFds.erase(fd);
             close(fd);
             ctx->inFd = -1;
+            // Request body is no longer needed once fully written to CGI stdin.
+            if (this->clients.count(ctx->clientFd))
+                this->clients[ctx->clientFd].request.clearBody();
+            ctx->bodyToWrite = NULL;
             // No hacemos return para que pueda leer en esta misma vuelta
         }
     }
@@ -603,10 +623,18 @@ void Webserv::handleCgiEvent(int fd, uint32_t events)
         {
             ctx->rawResponse.append(buffer, n);
         }
-        else if (n == 0 || (n < 0 && errno != EAGAIN && errno != EWOULDBLOCK))
+        else if (n == 0)
         {
-            logDebug(GREEN, std::string("[CGI] Output completo:\n") + ctx->rawResponse);
+            logDebug(GREEN, std::string("[CGI] Output completo bytes=") +
+                                to_string(ctx->rawResponse.size()));
             finalizeCgiResponse(ctx, fd);
+        }
+        else
+        {
+            epoll_ctl(this->epollFd, EPOLL_CTL_DEL, fd, NULL);
+            _cgiFds.erase(fd);
+            close(fd);
+            ctx->outFd = -1;
         }
     }
 }
@@ -620,13 +648,11 @@ void Webserv::handleClientData(int fd)
 {
     const size_t kProgressLogStepBytes = 5 * 1024 * 1024;
 
-    char buffer[8192];
+    char buffer[65536];
     ssize_t bytes = recv(fd, buffer, sizeof(buffer), 0);
 
     if (bytes < 0)
     {
-        if (errno == EAGAIN || errno == EWOULDBLOCK)
-            return;
         this->closeConnection(fd);
         return;
     }
@@ -647,7 +673,11 @@ void Webserv::handleClientData(int fd)
         // If headers are already received, check Content-Length
         // and respond with 413 without waiting for the full body
         // ------------------------------------------------------------
-        size_t headersEnd = client.readBuffer.find("\r\n\r\n");
+        size_t headersEnd = std::string::npos;
+        if (client.requestMetaParsed)
+            headersEnd = client.requestHeadersEnd;
+        else
+            headersEnd = client.readBuffer.find("\r\n\r\n");
         if (headersEnd != std::string::npos)
         {
             size_t bodyStart = headersEnd + 4;
@@ -655,67 +685,109 @@ void Webserv::handleClientData(int fd)
             if (client.readBuffer.size() > bodyStart)
                 bodyAvailable = client.readBuffer.size() - bodyStart;
 
-            // Extract only the header section from the buffer
-            std::string headerPart = client.readBuffer.substr(0, headersEnd);
-            std::istringstream stream(headerPart);
-            std::string line;
-
-            std::string method;
-            std::string path;
-            std::string version;
-            std::map<std::string, std::string> headers;
-
-            // Parse the request line (e.g., "POST /path HTTP/1.1")
-            if (std::getline(stream, line))
+            if (!client.requestMetaParsed)
             {
-                if (!line.empty() && line[line.size() - 1] == '\r')
-                    line.erase(line.size() - 1);
+                // Extract and parse headers only once for this request.
+                std::string headerPart = client.readBuffer.substr(0, headersEnd);
+                std::istringstream stream(headerPart);
+                std::string line;
 
-                std::istringstream iss(line);
-                iss >> method >> path >> version;
+                // Parse the request line (e.g., "POST /path HTTP/1.1")
+                if (std::getline(stream, line))
+                {
+                    if (!line.empty() && line[line.size() - 1] == '\r')
+                        line.erase(line.size() - 1);
 
-                // Remove query string from the path (everything after '?')
-                size_t qpos = path.find('?');
-                if (qpos != std::string::npos)
-                    path = path.substr(0, qpos);
+                    std::istringstream iss(line);
+                    iss >> client.requestMethod >> client.requestPath >> client.requestVersion;
+
+                    // Remove query string from the path (everything after '?')
+                    size_t qpos = client.requestPath.find('?');
+                    if (qpos != std::string::npos)
+                    {
+                        client.requestQuery = client.requestPath.substr(qpos + 1);
+                        client.requestPath = client.requestPath.substr(0, qpos);
+                    }
+                    else
+                        client.requestQuery.clear();
+                }
+
+                // Parse all HTTP headers into a map
+                while (std::getline(stream, line))
+                {
+                    if (!line.empty() && line[line.size() - 1] == '\r')
+                        line.erase(line.size() - 1);
+
+                    if (line.empty())
+                        break;
+
+                    size_t colon = line.find(':');
+                    if (colon == std::string::npos)
+                        continue;
+
+                    std::string key = line.substr(0, colon);
+                    std::string value = line.substr(colon + 1);
+
+                    // Trim leading spaces/tabs from header value
+                    while (!value.empty() && (value[0] == ' ' || value[0] == '\t'))
+                        value.erase(0, 1);
+
+                    // Normalize header key to lowercase for case-insensitive lookup
+                    for (size_t i = 0; i < key.size(); ++i)
+                        key[i] = std::tolower(static_cast<unsigned char>(key[i]));
+
+                    client.requestHeaders[key] = value;
+                }
+
+                client.requestHasContentLength = false;
+                client.requestBodyLength = 0;
+                client.requestIsChunked = false;
+
+                std::map<std::string, std::string>::const_iterator teIt =
+                    client.requestHeaders.find("transfer-encoding");
+                if (teIt != client.requestHeaders.end())
+                {
+                    std::string te = teIt->second;
+                    for (size_t i = 0; i < te.size(); ++i)
+                        te[i] = std::tolower(static_cast<unsigned char>(te[i]));
+                    client.requestIsChunked = (te.find("chunked") != std::string::npos);
+                }
+
+                std::map<std::string, std::string>::const_iterator clIt =
+                    client.requestHeaders.find("content-length");
+                if (clIt != client.requestHeaders.end())
+                {
+                    char* endptr = NULL;
+                    unsigned long declaredLen = std::strtoul(clIt->second.c_str(), &endptr, 10);
+                    if (clIt->second.empty() || (endptr && *endptr != '\0'))
+                        throw std::runtime_error("Invalid Content-Length value");
+                    client.requestHasContentLength = true;
+                    client.requestBodyLength = static_cast<size_t>(declaredLen);
+                }
+
+                client.requestMetaParsed = true;
+                client.requestHeadersEnd = headersEnd;
             }
 
-            // Parse all HTTP headers into a map
-            while (std::getline(stream, line))
-            {
-                if (!line.empty() && line[line.size() - 1] == '\r')
-                    line.erase(line.size() - 1);
-
-                if (line.empty())
-                    break;
-
-                size_t colon = line.find(':');
-                if (colon == std::string::npos)
-                    continue;
-
-                std::string key = line.substr(0, colon);
-                std::string value = line.substr(colon + 1);
-
-                // Trim leading spaces/tabs from header value
-                while (!value.empty() && (value[0] == ' ' || value[0] == '\t'))
-                    value.erase(0, 1);
-
-                // Normalize header key to lowercase for case-insensitive lookup
-                for (size_t i = 0; i < key.size(); ++i)
-                    key[i] = std::tolower(static_cast<unsigned char>(key[i]));
-
-                headers[key] = value;
-            }
+            const std::string& method = client.requestMethod;
+            const std::string& path = client.requestPath;
+            const std::map<std::string, std::string>& headers = client.requestHeaders;
 
             if (!client.headersLogged)
             {
-                std::string cl = headers.count("content-length") ? headers["content-length"] : "-";
-                std::string te =
-                    headers.count("transfer-encoding") ? headers["transfer-encoding"] : "-";
-                std::string headersMsg = "[HEADERS] FD=" + to_string(fd) + " method=" + method +
-                                         " path=" + path + " content-length=" + cl +
-                                         " transfer-encoding=" + te;
-                logDebug(BLUE, headersMsg);
+                std::map<std::string, std::string>::const_iterator clIt =
+                    headers.find("content-length");
+                std::map<std::string, std::string>::const_iterator teIt =
+                    headers.find("transfer-encoding");
+                std::string cl = (clIt != headers.end()) ? clIt->second : "-";
+                std::string te = (teIt != headers.end()) ? teIt->second : "-";
+                if (DEBUG)
+                {
+                    std::string headersMsg = "[HEADERS] FD=" + to_string(fd) + " method=" + method +
+                                             " path=" + path + " content-length=" + cl +
+                                             " transfer-encoding=" + te;
+                    logDebug(BLUE, headersMsg);
+                }
                 client.headersLogged = true;
             }
 
@@ -723,10 +795,13 @@ void Webserv::handleClientData(int fd)
             {
                 client.lastBodyLogCheckpoint =
                     (bodyAvailable / kProgressLogStepBytes) * kProgressLogStepBytes;
-                std::string bodyProgressMsg = "[BODY-PROGRESS] FD=" + to_string(fd) +
-                                              " received_body=" + to_string(bodyAvailable) +
-                                              " bytes";
-                logDebug(CYAN, bodyProgressMsg);
+                if (DEBUG)
+                {
+                    std::string bodyProgressMsg = "[BODY-PROGRESS] FD=" + to_string(fd) +
+                                                  " received_body=" + to_string(bodyAvailable) +
+                                                  " bytes";
+                    logDebug(CYAN, bodyProgressMsg);
+                }
             }
 
             const Location* loc = NULL;
@@ -737,23 +812,17 @@ void Webserv::handleClientData(int fd)
             if (loc)
                 maxBody = loc->client_max_body_size;
 
-            bool isChunked = false;
-            if (headers.count("transfer-encoding"))
-            {
-                std::string te = headers["transfer-encoding"];
-                for (size_t i = 0; i < te.size(); ++i)
-                    te[i] = std::tolower(static_cast<unsigned char>(te[i]));
-                isChunked = (te.find("chunked") != std::string::npos);
-            }
-
             // Important: bodyAvailable includes chunk metadata, so this early check
             // is reliable only for non-chunked bodies.
-            if (maxBody > 0 && !isChunked && bodyAvailable > maxBody)
+            if (maxBody > 0 && !client.requestIsChunked && bodyAvailable > maxBody)
             {
-                std::string earlyBodyMsg =
-                    "[EARLY] returning 413 body_received=" + to_string(bodyAvailable) +
-                    " limit=" + to_string(maxBody);
-                logDebug(RED, earlyBodyMsg);
+                if (DEBUG)
+                {
+                    std::string earlyBodyMsg =
+                        "[EARLY] returning 413 body_received=" + to_string(bodyAvailable) +
+                        " limit=" + to_string(maxBody);
+                    logDebug(RED, earlyBodyMsg);
+                }
                 HttpResponse res;
                 res.setStatusCode(413);
                 res.setBody("<html><body><h1>413 Payload Too Large</h1></body></html>");
@@ -764,6 +833,7 @@ void Webserv::handleClientData(int fd)
                 client.readBuffer.clear();
                 client.headersLogged = false;
                 client.lastBodyLogCheckpoint = 0;
+                client.resetRequestCache();
 
                 epoll_event ev;
                 std::memset(&ev, 0, sizeof(ev));
@@ -774,32 +844,35 @@ void Webserv::handleClientData(int fd)
             }
 
             // If we have a valid path and a Content-Length header, validate it
-            if (!path.empty() && headers.count("content-length"))
+            if (!path.empty() && client.requestHasContentLength)
             {
-                unsigned long declaredLen = 0;
-                char* endptr = NULL;
-                declaredLen = std::strtoul(headers["content-length"].c_str(), &endptr, 10);
-                if (*headers["content-length"].c_str() == '\0' || (endptr && *endptr != '\0'))
-                    throw std::runtime_error("Invalid Content-Length value");
-
                 size_t waitingFor = 0;
-                if (declaredLen > bodyAvailable)
-                    waitingFor = declaredLen - bodyAvailable;
-                std::string bodyCheckMsg = "[BODY-CHECK] path=" + path +
-                                           " declared_content-length=" + to_string(declaredLen) +
-                                           " body_available=" + to_string(bodyAvailable) +
-                                           " waiting_for=" + to_string(waitingFor) + " bytes";
-                logDebug(GREEN, bodyCheckMsg);
+                if (client.requestBodyLength > bodyAvailable)
+                    waitingFor = client.requestBodyLength - bodyAvailable;
+                if (DEBUG)
+                {
+                    std::string bodyCheckMsg =
+                        "[BODY-CHECK] path=" + path +
+                        " declared_content-length=" + to_string(client.requestBodyLength) +
+                        " body_available=" + to_string(bodyAvailable) +
+                        " waiting_for=" + to_string(waitingFor) + " bytes";
+                    logDebug(GREEN, bodyCheckMsg);
+                }
 
                 if (loc)
                 {
                     // Check against configured maximum body size
-                    if (loc->client_max_body_size > 0 && declaredLen > loc->client_max_body_size)
+                    if (loc->client_max_body_size > 0 &&
+                        client.requestBodyLength > loc->client_max_body_size)
                     {
-                        std::string earlyLenMsg = std::string("[EARLY] returning 413") +
-                                                  " declaredLen=" + to_string(declaredLen) +
-                                                  " limit=" + to_string(loc->client_max_body_size);
-                        logDebug(RED, earlyLenMsg);
+                        if (DEBUG)
+                        {
+                            std::string earlyLenMsg =
+                                std::string("[EARLY] returning 413") +
+                                " declaredLen=" + to_string(client.requestBodyLength) +
+                                " limit=" + to_string(loc->client_max_body_size);
+                            logDebug(RED, earlyLenMsg);
+                        }
                         // Build 413 Payload Too Large response
                         HttpResponse res;
                         res.setStatusCode(413);
@@ -814,6 +887,7 @@ void Webserv::handleClientData(int fd)
                         client.readBuffer.clear();
                         client.headersLogged = false;
                         client.lastBodyLogCheckpoint = 0;
+                        client.resetRequestCache();
 
                         // Switch epoll to write mode to send the response immediately
                         epoll_event ev;
@@ -828,32 +902,17 @@ void Webserv::handleClientData(int fd)
             }
 
             bool requestComplete = true;
-            if (headers.count("transfer-encoding"))
+            if (client.requestIsChunked)
             {
-                std::string t_encod = headers["transfer-encoding"];
-                for (size_t i = 0; i < t_encod.size(); ++i)
-                    t_encod[i] = std::tolower(static_cast<unsigned char>(t_encod[i]));
-
-                // Si es chunked, el cuerpo puede ser de cualquier tamaño, (Content-Length no se usa
-                // en chunked) el buffer debe terminar con "0\r\n\r\n" para considerarlo completo
-                if (t_encod.find("chunked") != std::string::npos)
-                {
-                    if (client.readBuffer.size() < 5 ||
-                        client.readBuffer.compare(client.readBuffer.size() - 5, 5, "0\r\n\r\n") !=
-                            0)
-                        requestComplete = false;
-                }
+                // En chunked no hay Content-Length utilizable; el final real llega con "0\r\n\r\n".
+                if (client.readBuffer.size() < 5 ||
+                    client.readBuffer.compare(client.readBuffer.size() - 5, 5, "0\r\n\r\n") != 0)
+                    requestComplete = false;
             }
 
-            if (headers.count("content-length"))
+            if (client.requestHasContentLength)
             {
-                char* endptr = NULL;
-                unsigned long declaredLen =
-                    std::strtoul(headers["content-length"].c_str(), &endptr, 10);
-                if (*headers["content-length"].c_str() == '\0' || (endptr && *endptr != '\0'))
-                    throw std::runtime_error("Invalid Content-Length value");
-
-                if (bodyAvailable < declaredLen)
+                if (bodyAvailable < client.requestBodyLength)
                     requestComplete = false;
             }
 
@@ -861,17 +920,53 @@ void Webserv::handleClientData(int fd)
                 return;
         }
         // ------------------------------------------------------------
-        if (client.request.parse(client.readBuffer))
+        bool requestReady = false;
+        if (client.requestHasContentLength && !client.requestIsChunked)
         {
-            // LOG: Request parsing complete
-            logInfo(GREEN, "Request parsed successfully for FD: " + to_string(fd) + " Method: " +
-                               client.request.getMethod() + " Path: " + client.request.getPath() +
-                               " Body size: " + to_string(client.request.getBody().size()) +
-                               " bytes");
-            std::string parseCompleteMsg =
-                "[DEBUG] REQUEST COMPLETA. Método: " + client.request.getMethod() +
-                " | Body size: " + to_string(client.request.getBody().size()) + " bytes";
-            logDebug(BLUE, parseCompleteMsg);
+            size_t bodyStart = client.requestHeadersEnd + 4;
+            if (client.readBuffer.size() >= bodyStart + client.requestBodyLength)
+            {
+                client.request.setClientFd(fd);
+                client.request.setMethod(client.requestMethod);
+                client.request.setPath(client.requestPath);
+                client.request.setQuery(client.requestQuery);
+                client.request.setVersion(client.requestVersion);
+                client.request.setHeaders(client.requestHeaders);
+
+                if (bodyStart > 0)
+                    client.readBuffer.erase(0, bodyStart);
+                if (client.readBuffer.size() > client.requestBodyLength)
+                    client.readBuffer.resize(client.requestBodyLength);
+                client.request.swapBody(client.readBuffer);
+                requestReady = true;
+            }
+        }
+        else if (client.request.parse(client.readBuffer))
+        {
+            requestReady = true;
+        }
+
+        if (requestReady)
+        {
+            if (DEBUG && (client.request.getMethod() != "GET" || !client.request.getBody().empty()))
+            {
+                logDebug(GREEN, "[REQUEST-START] FD: " + to_string(fd) +
+                                    " Method: " + client.request.getMethod() +
+                                    " Path: " + client.request.getPath() + " Body size: " +
+                                    to_string(client.request.getBody().size()) + " bytes");
+            }
+
+            if (DEBUG)
+            {
+                std::string parseCompleteMsg =
+                    "[DEBUG] REQUEST COMPLETA. Método: " + client.request.getMethod() +
+                    " | Body size: " + to_string(client.request.getBody().size()) + " bytes";
+                logDebug(BLUE, parseCompleteMsg);
+            }
+
+            client.readBuffer.clear();
+            client.headersLogged = false;
+            client.lastBodyLogCheckpoint = 0;
 
             Config* server = &this->clients[fd].config;
 
@@ -880,22 +975,26 @@ void Webserv::handleClientData(int fd)
 
             if (res.getIsCgi())
             {
-                logDebug(PURPLE, "[ROUTE] request routed to CGI handler, waiting for CGI "
-                                 "output...handleCgiEvent will take care of the rest.");
+                if (DEBUG)
+                    logDebug(PURPLE, "[ROUTE] request routed to CGI handler, waiting for CGI "
+                                     "output...handleCgiEvent will take care of the rest.");
+                // For CGI we keep client.request body for async pipe writing,
+                // but raw readBuffer is no longer needed.
+                client.readBuffer.clear();
+                client.headersLogged = false;
+                client.lastBodyLogCheckpoint = 0;
                 return;
             }
             // -------------- DEBUG: ------------------
-            std::string handleMsg = "[HANDLE] response status=" + to_string(res.getStatusCode());
-            logDebug(BLUE, handleMsg);
+            if (DEBUG)
+            {
+                std::string handleMsg =
+                    "[HANDLE] response status=" + to_string(res.getStatusCode());
+                logDebug(BLUE, handleMsg);
+            }
             // -----------------------------------------
             client.writeBuffer = res.toString(client.request.getMethod() == "HEAD");
             client.bytesSent = 0;
-            if (client.writeBuffer.size() < 500) // Solo imprimimos si no es el body de 100MB
-                std::cout << "Respuesta: " << client.writeBuffer << " para FD " << fd << RESET
-                          << std::endl;
-            else
-                std::cout << "Respuesta grande generada (" << client.writeBuffer.size() << " bytes)"
-                          << std::endl;
             epoll_event ev;
             std::memset(&ev, 0, sizeof(ev));
             ev.events = EPOLLOUT;
@@ -905,6 +1004,7 @@ void Webserv::handleClientData(int fd)
             client.readBuffer.clear();
             client.headersLogged = false;
             client.lastBodyLogCheckpoint = 0;
+            client.resetRequestCache();
         }
     }
     catch (std::exception& e)
@@ -921,6 +1021,7 @@ void Webserv::handleClientData(int fd)
         client.readBuffer.clear();
         client.headersLogged = false;
         client.lastBodyLogCheckpoint = 0;
+        client.resetRequestCache();
         // CAMBIO A MODO ESCRITURA (EPOLLOUT)
         epoll_event ev;
         std::memset(&ev, 0, sizeof(ev));
@@ -947,11 +1048,14 @@ void Webserv::handleClientWrite(int fd)
 
     if (client.writeBuffer.empty() || client.bytesSent >= client.writeBuffer.size())
     {
-        logDebug(GREEN, std::string("[WRITE-COMPLETE] FD ") + to_string(fd) +
-                            ", total bytes sent: " + to_string(client.bytesSent));
-        logDebug(YELLOW, std::string("[DEBUG] No hay más datos que enviar o índice de bytes "
-                                     "enviados supera el tamaño ") +
-                             "del buffer. FD: " + to_string(fd));
+        if (DEBUG)
+        {
+            logDebug(GREEN, std::string("[WRITE-COMPLETE] FD ") + to_string(fd) +
+                                ", total bytes sent: " + to_string(client.bytesSent));
+            logDebug(YELLOW, std::string("[DEBUG] No hay más datos que enviar o índice de bytes "
+                                         "enviados supera el tamaño ") +
+                                 "del buffer. FD: " + to_string(fd));
+        }
         client.bytesSent = 0;
         client.writeBuffer.clear();
         struct epoll_event ev;
@@ -970,16 +1074,16 @@ void Webserv::handleClientWrite(int fd)
     if (sent > 0)
     {
         client.bytesSent += sent;
-        logDebug(GREEN, std::string("[WRITE] Sent ") + to_string(sent) + " bytes to FD " +
-                            to_string(fd) + ", total sent: " + to_string(client.bytesSent) + "/" +
-                            to_string(client.writeBuffer.size()));
+        if (DEBUG)
+        {
+            logDebug(GREEN, std::string("[WRITE] Sent ") + to_string(sent) + " bytes to FD " +
+                                to_string(fd) + ", total sent: " + to_string(client.bytesSent) +
+                                "/" + to_string(client.writeBuffer.size()));
+        }
     }
     else if (sent < 0)
     {
-        if (errno == EAGAIN || errno == EWOULDBLOCK)
-            return;
-        std::cerr << RED << " [ERROR] Send failed on FD " << fd << ": " << strerror(errno) << RESET
-                  << std::endl;
+        std::cerr << RED << " [ERROR] Send failed on FD " << fd << RESET << std::endl;
         this->closeConnection(fd);
         return;
     }
@@ -987,7 +1091,9 @@ void Webserv::handleClientWrite(int fd)
     // FINALIZACIÓN:
     if (client.bytesSent >= client.writeBuffer.size())
     {
-        logDebug(GREEN, std::string("[SUCCESS] Respuesta enviada completa al FD ") + to_string(fd));
+        if (DEBUG)
+            logDebug(GREEN,
+                     std::string("[SUCCESS] Respuesta enviada completa al FD ") + to_string(fd));
         client.writeBuffer.clear();
         client.bytesSent = 0;
 
