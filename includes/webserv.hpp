@@ -6,7 +6,7 @@
 /*   By: macastro <macastro@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2025/12/10 20:21:23 by msoriano          #+#    #+#             */
-/*   Updated: 2026/04/12 18:28:55 by macastro         ###   ########.fr       */
+/*   Updated: 2026/04/12 19:06:10 by macastro         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -116,12 +116,13 @@ struct ClientState
     bool cgiStreaming;
     size_t cgiReceivedBody;
     CgiContext* cgiCtx;
+    bool cgiReadPaused;
 
     ClientState()
         : fd(-1), isRequestFinished(false), headersLogged(false), lastBodyLogCheckpoint(0),
           requestMetaParsed(false), requestHeadersEnd(0), requestHasContentLength(false),
           requestBodyLength(0), requestIsChunked(false), cgiStreaming(false), cgiReceivedBody(0),
-          cgiCtx(NULL)
+          cgiCtx(NULL), cgiReadPaused(false)
     {
     }
 
@@ -144,6 +145,7 @@ struct ClientState
         cgiStreaming = false;
         cgiReceivedBody = 0;
         cgiCtx = NULL;
+        cgiReadPaused = false;
     }
 };
 

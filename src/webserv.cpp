@@ -6,7 +6,7 @@
 /*   By: macastro <macastro@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/01/08 18:51:13 by angnavar          #+#    #+#             */
-/*   Updated: 2026/04/12 18:28:55 by macastro         ###   ########.fr       */
+/*   Updated: 2026/04/12 19:06:10 by macastro         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -576,6 +576,8 @@ void Webserv::finalizeCgiResponse(CgiContext* ctx, int fd)
 
 void Webserv::handleCgiEvent(int fd, uint32_t events)
 {
+    const size_t kCgiBufferLowWatermark = 128 * 1024;
+
     if (_cgiFds.find(fd) == _cgiFds.end())
         return;
 
@@ -591,6 +593,13 @@ void Webserv::handleCgiEvent(int fd, uint32_t events)
             {
                 ctx->bytesWritten += n;
                 ctx->writeBuffer.erase(0, static_cast<size_t>(n));
+                if (this->clients.count(ctx->clientFd))
+                {
+                    ClientState& client = this->clients[ctx->clientFd];
+                    if (client.cgiCtx == ctx && client.cgiReadPaused &&
+                        ctx->writeBuffer.size() <= kCgiBufferLowWatermark)
+                        client.cgiReadPaused = false;
+                }
             }
             else
             {
@@ -656,7 +665,15 @@ void Webserv::handleCgiEvent(int fd, uint32_t events)
  */
 void Webserv::handleClientData(int fd)
 {
+    const size_t kCgiBufferHighWatermark = 512 * 1024;
     const size_t kProgressLogStepBytes = 5 * 1024 * 1024;
+
+    if (this->clients.find(fd) == this->clients.end())
+        return;
+
+    ClientState& client = this->clients[fd];
+    if (client.cgiStreaming && client.cgiCtx && client.cgiReadPaused)
+        return;
 
     char buffer[65536];
     ssize_t bytes = recv(fd, buffer, sizeof(buffer), 0);
@@ -672,7 +689,6 @@ void Webserv::handleClientData(int fd)
         return;
     }
 
-    ClientState& client = this->clients[fd];
     client.request.setClientFd(fd);
     client.readBuffer.append(buffer, bytes);
 
@@ -699,6 +715,9 @@ void Webserv::handleClientData(int fd)
 
         if (client.cgiReceivedBody >= client.requestBodyLength)
             ctx->inputFinished = true;
+
+        if (!client.cgiReadPaused && ctx->writeBuffer.size() >= kCgiBufferHighWatermark)
+            client.cgiReadPaused = true;
 
         if (ctx->inputFinished && ctx->inFd != -1 && ctx->writeBuffer.empty() &&
             !ctx->inputRegistered)
@@ -986,6 +1005,7 @@ void Webserv::handleClientData(int fd)
                             client.cgiStreaming = true;
                             client.cgiCtx = ctx;
                             client.cgiReceivedBody = 0;
+                            client.cgiReadPaused = false;
 
                             if (bodyAvailable > 0)
                             {
@@ -1006,6 +1026,10 @@ void Webserv::handleClientData(int fd)
 
                             if (client.cgiReceivedBody >= client.requestBodyLength)
                                 ctx->inputFinished = true;
+
+                            if (!client.cgiReadPaused &&
+                                ctx->writeBuffer.size() >= kCgiBufferHighWatermark)
+                                client.cgiReadPaused = true;
 
                             if (ctx->inputFinished && ctx->inFd != -1 && ctx->writeBuffer.empty() &&
                                 !ctx->inputRegistered)
