@@ -6,7 +6,7 @@
 /*   By: macastro <macastro@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2025/12/10 20:21:23 by msoriano          #+#    #+#             */
-/*   Updated: 2026/04/12 17:50:15 by macastro         ###   ########.fr       */
+/*   Updated: 2026/04/12 18:28:55 by macastro         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -58,12 +58,18 @@ struct CgiContext
     int clientFd; // Client socket file descriptor associated with this CGI execution
     int inFd;     // Pipe to send request body to CGI (the CGI reads from this fd as its stdin)
     int outFd;    // Pipe to read the response from CGI (what the CGI writes to its stdout)
-    const std::string* bodyToWrite;
+    std::string writeBuffer;
     size_t bytesWritten;
+    bool inputFinished;
+    bool inputRegistered;
     std::string rawResponse;
     pid_t pid;
 
-    CgiContext() : clientFd(-1), inFd(-1), outFd(-1), bodyToWrite(NULL), bytesWritten(0), pid(-1) {}
+    CgiContext()
+        : clientFd(-1), inFd(-1), outFd(-1), bytesWritten(0), inputFinished(false),
+          inputRegistered(false), pid(-1)
+    {
+    }
 };
 
 struct Config
@@ -107,11 +113,15 @@ struct ClientState
     bool requestHasContentLength;
     size_t requestBodyLength;
     bool requestIsChunked;
+    bool cgiStreaming;
+    size_t cgiReceivedBody;
+    CgiContext* cgiCtx;
 
     ClientState()
         : fd(-1), isRequestFinished(false), headersLogged(false), lastBodyLogCheckpoint(0),
           requestMetaParsed(false), requestHeadersEnd(0), requestHasContentLength(false),
-          requestBodyLength(0), requestIsChunked(false)
+          requestBodyLength(0), requestIsChunked(false), cgiStreaming(false), cgiReceivedBody(0),
+          cgiCtx(NULL)
     {
     }
 
@@ -127,6 +137,13 @@ struct ClientState
         requestHasContentLength = false;
         requestBodyLength = 0;
         requestIsChunked = false;
+    }
+
+    void resetCgiStreamState()
+    {
+        cgiStreaming = false;
+        cgiReceivedBody = 0;
+        cgiCtx = NULL;
     }
 };
 

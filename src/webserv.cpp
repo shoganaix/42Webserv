@@ -6,7 +6,7 @@
 /*   By: macastro <macastro@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/01/08 18:51:13 by angnavar          #+#    #+#             */
-/*   Updated: 2026/04/12 17:54:55 by macastro         ###   ########.fr       */
+/*   Updated: 2026/04/12 18:28:55 by macastro         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -95,6 +95,13 @@ void Webserv::destroyCgiContext(CgiContext* ctx, bool killProcess)
 {
     if (!ctx)
         return;
+
+    if (this->clients.count(ctx->clientFd))
+    {
+        ClientState& client = this->clients[ctx->clientFd];
+        if (client.cgiCtx == ctx)
+            client.resetCgiStreamState();
+    }
 
     if (ctx->inFd != -1)
     {
@@ -461,8 +468,9 @@ HttpResponse Webserv::routeRequest(const HttpRequest& req, const Config& server)
             // Creamos el contexto para que handleCgiEvent sepa qué hacer
             CgiContext* ctx = new CgiContext();
             ctx->clientFd = req.getClientFd(); // Asegúrate de haberlo seteado antes
-            ctx->bodyToWrite = &req.getBody();
+            ctx->writeBuffer = req.getBody();
             ctx->bytesWritten = 0;
+            ctx->inputFinished = true;
             ctx->pid = result.pid;
             ctx->inFd = result.inFd;
             ctx->outFd = result.outFd;
@@ -475,7 +483,7 @@ HttpResponse Webserv::routeRequest(const HttpRequest& req, const Config& server)
             this->_cgiFds[result.inFd] = ctx;
             this->_cgiFds[result.outFd] = ctx;
 
-            if (!ctx->bodyToWrite || ctx->bodyToWrite->empty())
+            if (ctx->writeBuffer.empty())
             {
                 // CLAVE: no body -> epoll delete inFd and Close pipe
                 // -> Esto es porque el CGI espera un EOF para empezar a ejecutar
@@ -495,6 +503,7 @@ HttpResponse Webserv::routeRequest(const HttpRequest& req, const Config& server)
                 evIn.events = EPOLLOUT;
                 evIn.data.fd = ctx->inFd;
                 epoll_ctl(this->epollFd, EPOLL_CTL_ADD, ctx->inFd, &evIn);
+                ctx->inputRegistered = true;
             }
 
             // Registramos pipe de salida para leer la respuesta del CGI
@@ -575,16 +584,13 @@ void Webserv::handleCgiEvent(int fd, uint32_t events)
     // --- 1. ESCRITURA AL CGI (Hacia el inFd / Pipe 8) ---
     if (fd == ctx->inFd && (events & EPOLLOUT))
     {
-        if (!ctx->bodyToWrite)
-            return;
-
-        const std::string& body = *(ctx->bodyToWrite);
-        if (ctx->bytesWritten < body.size())
+        if (!ctx->writeBuffer.empty())
         {
-            ssize_t n = write(fd, body.data() + ctx->bytesWritten, body.size() - ctx->bytesWritten);
+            ssize_t n = write(fd, ctx->writeBuffer.data(), ctx->writeBuffer.size());
             if (n > 0)
             {
                 ctx->bytesWritten += n;
+                ctx->writeBuffer.erase(0, static_cast<size_t>(n));
             }
             else
             {
@@ -593,22 +599,26 @@ void Webserv::handleCgiEvent(int fd, uint32_t events)
                 _cgiFds.erase(fd);
                 close(fd);
                 ctx->inFd = -1;
+                ctx->inputRegistered = false;
                 return;
             }
         }
 
-        // Cierre normal al terminar los 100MB
-        if (ctx->inFd != -1 && ctx->bytesWritten >= body.size())
+        if (ctx->inFd != -1 && ctx->writeBuffer.empty() && ctx->inputFinished)
         {
             epoll_ctl(this->epollFd, EPOLL_CTL_DEL, fd, NULL);
             _cgiFds.erase(fd);
             close(fd);
             ctx->inFd = -1;
-            // Request body is no longer needed once fully written to CGI stdin.
-            if (this->clients.count(ctx->clientFd))
-                this->clients[ctx->clientFd].request.clearBody();
-            ctx->bodyToWrite = NULL;
+            ctx->inputRegistered = false;
             // No hacemos return para que pueda leer en esta misma vuelta
+        }
+        else if (ctx->inFd != -1 && ctx->writeBuffer.empty() && !ctx->inputFinished &&
+                 ctx->inputRegistered)
+        {
+            epoll_ctl(this->epollFd, EPOLL_CTL_DEL, fd, NULL);
+            _cgiFds.erase(fd);
+            ctx->inputRegistered = false;
         }
     }
 
@@ -665,6 +675,41 @@ void Webserv::handleClientData(int fd)
     ClientState& client = this->clients[fd];
     client.request.setClientFd(fd);
     client.readBuffer.append(buffer, bytes);
+
+    if (client.cgiStreaming && client.cgiCtx)
+    {
+        CgiContext* ctx = client.cgiCtx;
+        if (!client.readBuffer.empty())
+        {
+            ctx->writeBuffer.append(client.readBuffer);
+            client.cgiReceivedBody += client.readBuffer.size();
+            client.readBuffer.clear();
+
+            if (ctx->inFd != -1 && !ctx->inputRegistered)
+            {
+                struct epoll_event evIn;
+                std::memset(&evIn, 0, sizeof(evIn));
+                evIn.events = EPOLLOUT;
+                evIn.data.fd = ctx->inFd;
+                epoll_ctl(this->epollFd, EPOLL_CTL_ADD, ctx->inFd, &evIn);
+                this->_cgiFds[ctx->inFd] = ctx;
+                ctx->inputRegistered = true;
+            }
+        }
+
+        if (client.cgiReceivedBody >= client.requestBodyLength)
+            ctx->inputFinished = true;
+
+        if (ctx->inputFinished && ctx->inFd != -1 && ctx->writeBuffer.empty() &&
+            !ctx->inputRegistered)
+        {
+            _cgiFds.erase(ctx->inFd);
+            close(ctx->inFd);
+            ctx->inFd = -1;
+        }
+
+        return;
+    }
 
     try
     {
@@ -897,6 +942,103 @@ void Webserv::handleClientData(int fd)
                         epoll_ctl(this->epollFd, EPOLL_CTL_MOD, fd, &ev);
 
                         return;
+                    }
+                }
+            }
+
+            if (!client.cgiStreaming && loc && method == "POST" && client.requestHasContentLength &&
+                !client.requestIsChunked)
+            {
+                ResolvedPath resolved = resolvePath(*loc, path);
+                if (isCgiRequest(*loc, resolved.fsPath))
+                {
+                    CgiTarget target = _cgiHandler->detectCgi(*loc, resolved.fsPath);
+                    if (target.isCgi)
+                    {
+                        try
+                        {
+                            client.request.setClientFd(fd);
+                            client.request.setMethod(client.requestMethod);
+                            client.request.setPath(client.requestPath);
+                            client.request.setQuery(client.requestQuery);
+                            client.request.setVersion(client.requestVersion);
+                            client.request.setHeaders(client.requestHeaders);
+                            client.request.setBody("");
+
+                            CgiResult result = _cgiHandler->execute(
+                                client.request, target, client.config.server_name,
+                                client.config.port, "127.0.0.1");
+
+                            CgiContext* ctx = new CgiContext();
+                            ctx->clientFd = fd;
+                            ctx->pid = result.pid;
+                            ctx->inFd = result.inFd;
+                            ctx->outFd = result.outFd;
+                            this->_cgiFds[result.inFd] = ctx;
+                            this->_cgiFds[result.outFd] = ctx;
+
+                            struct epoll_event evOut;
+                            std::memset(&evOut, 0, sizeof(evOut));
+                            evOut.events = EPOLLIN;
+                            evOut.data.fd = result.outFd;
+                            epoll_ctl(this->epollFd, EPOLL_CTL_ADD, result.outFd, &evOut);
+
+                            client.cgiStreaming = true;
+                            client.cgiCtx = ctx;
+                            client.cgiReceivedBody = 0;
+
+                            if (bodyAvailable > 0)
+                            {
+                                ctx->writeBuffer.append(client.readBuffer, bodyStart,
+                                                        client.readBuffer.size() - bodyStart);
+                                client.cgiReceivedBody += client.readBuffer.size() - bodyStart;
+
+                                if (ctx->inFd != -1 && !ctx->inputRegistered)
+                                {
+                                    struct epoll_event evIn;
+                                    std::memset(&evIn, 0, sizeof(evIn));
+                                    evIn.events = EPOLLOUT;
+                                    evIn.data.fd = ctx->inFd;
+                                    epoll_ctl(this->epollFd, EPOLL_CTL_ADD, ctx->inFd, &evIn);
+                                    ctx->inputRegistered = true;
+                                }
+                            }
+
+                            if (client.cgiReceivedBody >= client.requestBodyLength)
+                                ctx->inputFinished = true;
+
+                            if (ctx->inputFinished && ctx->inFd != -1 && ctx->writeBuffer.empty() &&
+                                !ctx->inputRegistered)
+                            {
+                                _cgiFds.erase(ctx->inFd);
+                                close(ctx->inFd);
+                                ctx->inFd = -1;
+                            }
+
+                            client.readBuffer.clear();
+                            return;
+                        }
+                        catch (std::exception&)
+                        {
+                            HttpResponse res;
+                            res.setStatusCode(500);
+                            res.setBody(
+                                "<html><body><h1>500 Internal Server Error</h1></body></html>");
+                            res.addHeader("Content-Type", "text/html");
+                            client.writeBuffer = res.toString(false);
+                            client.bytesSent = 0;
+                            client.readBuffer.clear();
+                            client.headersLogged = false;
+                            client.lastBodyLogCheckpoint = 0;
+                            client.resetRequestCache();
+
+                            epoll_event ev;
+                            std::memset(&ev, 0, sizeof(ev));
+                            ev.events = EPOLLOUT;
+                            ev.data.fd = fd;
+                            epoll_ctl(this->epollFd, EPOLL_CTL_MOD, fd, &ev);
+                            return;
+                        }
                     }
                 }
             }

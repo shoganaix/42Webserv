@@ -5,3 +5,5 @@ webserv
 *.a
 
 *.log
+
+.github/
