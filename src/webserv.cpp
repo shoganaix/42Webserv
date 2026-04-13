@@ -6,7 +6,7 @@
 /*   By: macastro <macastro@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/01/08 18:51:13 by angnavar          #+#    #+#             */
-/*   Updated: 2026/04/12 19:06:10 by macastro         ###   ########.fr       */
+/*   Updated: 2026/04/13 17:39:45 by macastro         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -90,6 +90,94 @@
 #include "httpResponse.hpp"
 #include "cgiHandler.hpp"
 #include "pathResolver.hpp"
+
+static size_t getCgiPendingBytes(const CgiContext* ctx)
+{
+    if (!ctx)
+        return 0;
+    if (ctx->writeBuffer.size() <= ctx->writeOffset)
+        return 0;
+    return ctx->writeBuffer.size() - ctx->writeOffset;
+}
+
+bool Webserv::parseChunkedIncremental(ClientState& client)
+{
+    if (!client.requestIsChunked)
+        return false;
+
+    if (!client.chunkParseInitialized)
+    {
+        client.chunkParseInitialized = true;
+        client.chunkParsePos = client.requestHeadersEnd + 4;
+        client.chunkCurrentSize = 0;
+        client.chunkParseState = 0;
+        client.chunkParseComplete = false;
+        client.chunkDecodedBody.clear();
+    }
+
+    while (true)
+    {
+        if (client.chunkParseState == 0)
+        {
+            size_t lineEnd = client.readBuffer.find("\r\n", client.chunkParsePos);
+            if (lineEnd == std::string::npos)
+                return false;
+
+            std::string sizeLine =
+                client.readBuffer.substr(client.chunkParsePos, lineEnd - client.chunkParsePos);
+            size_t semicolonPos = sizeLine.find(';');
+            if (semicolonPos != std::string::npos)
+                sizeLine.erase(semicolonPos);
+            if (sizeLine.empty())
+                throw std::runtime_error("Invalid chunk size");
+
+            std::stringstream ss;
+            size_t chunkSize = 0;
+            ss << std::hex << sizeLine;
+            ss >> chunkSize;
+            if (ss.fail())
+                throw std::runtime_error("Invalid chunk size");
+
+            client.chunkCurrentSize = chunkSize;
+            client.chunkParsePos = lineEnd + 2;
+            if (chunkSize == 0)
+                client.chunkParseState = 3;
+            else
+                client.chunkParseState = 1;
+        }
+        else if (client.chunkParseState == 1)
+        {
+            if (client.readBuffer.size() < client.chunkParsePos + client.chunkCurrentSize)
+                return false;
+
+            client.chunkDecodedBody.append(client.readBuffer, client.chunkParsePos,
+                                           client.chunkCurrentSize);
+            client.chunkParsePos += client.chunkCurrentSize;
+            client.chunkParseState = 2;
+        }
+        else if (client.chunkParseState == 2)
+        {
+            if (client.readBuffer.size() < client.chunkParsePos + 2)
+                return false;
+            if (client.readBuffer.compare(client.chunkParsePos, 2, "\r\n") != 0)
+                throw std::runtime_error("Missing CRLF after chunk data");
+
+            client.chunkParsePos += 2;
+            client.chunkParseState = 0;
+        }
+        else
+        {
+            if (client.readBuffer.size() < client.chunkParsePos + 2)
+                return false;
+            if (client.readBuffer.compare(client.chunkParsePos, 2, "\r\n") != 0)
+                throw std::runtime_error("Invalid final chunk ending");
+
+            client.chunkParsePos += 2;
+            client.chunkParseComplete = true;
+            return true;
+        }
+    }
+}
 
 void Webserv::destroyCgiContext(CgiContext* ctx, bool killProcess)
 {
@@ -577,6 +665,7 @@ void Webserv::finalizeCgiResponse(CgiContext* ctx, int fd)
 void Webserv::handleCgiEvent(int fd, uint32_t events)
 {
     const size_t kCgiBufferLowWatermark = 128 * 1024;
+    const size_t kCgiProgressStepBytes = 10 * 1024 * 1024;
 
     if (_cgiFds.find(fd) == _cgiFds.end())
         return;
@@ -586,20 +675,47 @@ void Webserv::handleCgiEvent(int fd, uint32_t events)
     // --- 1. ESCRITURA AL CGI (Hacia el inFd / Pipe 8) ---
     if (fd == ctx->inFd && (events & EPOLLOUT))
     {
-        if (!ctx->writeBuffer.empty())
+        const size_t pending = getCgiPendingBytes(ctx);
+        if (pending > 0)
         {
-            ssize_t n = write(fd, ctx->writeBuffer.data(), ctx->writeBuffer.size());
+            ssize_t n = write(fd, ctx->writeBuffer.data() + ctx->writeOffset, pending);
             if (n > 0)
             {
                 ctx->bytesWritten += n;
-                ctx->writeBuffer.erase(0, static_cast<size_t>(n));
+                ctx->writeOffset += static_cast<size_t>(n);
+
+                if (ctx->bytesWritten >= ctx->progressLogCheckpoint + kCgiProgressStepBytes)
+                {
+                    ctx->progressLogCheckpoint =
+                        (ctx->bytesWritten / kCgiProgressStepBytes) * kCgiProgressStepBytes;
+                    std::cout << "[CGI-STREAM] client_fd=" << ctx->clientFd
+                              << " written=" << ctx->bytesWritten
+                              << " pending=" << getCgiPendingBytes(ctx) << std::endl;
+                }
+
+                if (ctx->writeOffset == ctx->writeBuffer.size())
+                {
+                    ctx->writeBuffer.clear();
+                    ctx->writeOffset = 0;
+                }
+                else if (ctx->writeOffset > 65536 &&
+                         ctx->writeOffset >= ctx->writeBuffer.size() / 2)
+                {
+                    ctx->writeBuffer.erase(0, ctx->writeOffset);
+                    ctx->writeOffset = 0;
+                }
+
                 if (this->clients.count(ctx->clientFd))
                 {
                     ClientState& client = this->clients[ctx->clientFd];
                     if (client.cgiCtx == ctx && client.cgiReadPaused &&
-                        ctx->writeBuffer.size() <= kCgiBufferLowWatermark)
+                        getCgiPendingBytes(ctx) <= kCgiBufferLowWatermark)
                         client.cgiReadPaused = false;
                 }
+            }
+            else if (n < 0 && (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR))
+            {
+                // Non-blocking pipe temporarily unavailable; keep fd registered for next EPOLLOUT.
             }
             else
             {
@@ -613,7 +729,7 @@ void Webserv::handleCgiEvent(int fd, uint32_t events)
             }
         }
 
-        if (ctx->inFd != -1 && ctx->writeBuffer.empty() && ctx->inputFinished)
+        if (ctx->inFd != -1 && getCgiPendingBytes(ctx) == 0 && ctx->inputFinished)
         {
             epoll_ctl(this->epollFd, EPOLL_CTL_DEL, fd, NULL);
             _cgiFds.erase(fd);
@@ -622,7 +738,7 @@ void Webserv::handleCgiEvent(int fd, uint32_t events)
             ctx->inputRegistered = false;
             // No hacemos return para que pueda leer en esta misma vuelta
         }
-        else if (ctx->inFd != -1 && ctx->writeBuffer.empty() && !ctx->inputFinished &&
+        else if (ctx->inFd != -1 && getCgiPendingBytes(ctx) == 0 && !ctx->inputFinished &&
                  ctx->inputRegistered)
         {
             epoll_ctl(this->epollFd, EPOLL_CTL_DEL, fd, NULL);
@@ -644,9 +760,17 @@ void Webserv::handleCgiEvent(int fd, uint32_t events)
         }
         else if (n == 0)
         {
+            std::cout << "[CGI-DONE] client_fd=" << ctx->clientFd
+                      << " written=" << ctx->bytesWritten
+                      << " response_bytes=" << ctx->rawResponse.size() << std::endl;
             logDebug(GREEN, std::string("[CGI] Output completo bytes=") +
                                 to_string(ctx->rawResponse.size()));
             finalizeCgiResponse(ctx, fd);
+        }
+        else if (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR)
+        {
+            // Non-blocking read would block/interrupted; wait for next readable event.
+            return;
         }
         else
         {
@@ -680,6 +804,8 @@ void Webserv::handleClientData(int fd)
 
     if (bytes < 0)
     {
+        if (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR)
+            return;
         this->closeConnection(fd);
         return;
     }
@@ -716,10 +842,10 @@ void Webserv::handleClientData(int fd)
         if (client.cgiReceivedBody >= client.requestBodyLength)
             ctx->inputFinished = true;
 
-        if (!client.cgiReadPaused && ctx->writeBuffer.size() >= kCgiBufferHighWatermark)
+        if (!client.cgiReadPaused && getCgiPendingBytes(ctx) >= kCgiBufferHighWatermark)
             client.cgiReadPaused = true;
 
-        if (ctx->inputFinished && ctx->inFd != -1 && ctx->writeBuffer.empty() &&
+        if (ctx->inputFinished && ctx->inFd != -1 && getCgiPendingBytes(ctx) == 0 &&
             !ctx->inputRegistered)
         {
             _cgiFds.erase(ctx->inFd);
@@ -1028,11 +1154,11 @@ void Webserv::handleClientData(int fd)
                                 ctx->inputFinished = true;
 
                             if (!client.cgiReadPaused &&
-                                ctx->writeBuffer.size() >= kCgiBufferHighWatermark)
+                                getCgiPendingBytes(ctx) >= kCgiBufferHighWatermark)
                                 client.cgiReadPaused = true;
 
-                            if (ctx->inputFinished && ctx->inFd != -1 && ctx->writeBuffer.empty() &&
-                                !ctx->inputRegistered)
+                            if (ctx->inputFinished && ctx->inFd != -1 &&
+                                getCgiPendingBytes(ctx) == 0 && !ctx->inputRegistered)
                             {
                                 _cgiFds.erase(ctx->inFd);
                                 close(ctx->inFd);
@@ -1070,10 +1196,29 @@ void Webserv::handleClientData(int fd)
             bool requestComplete = true;
             if (client.requestIsChunked)
             {
-                // En chunked no hay Content-Length utilizable; el final real llega con "0\r\n\r\n".
-                if (client.readBuffer.size() < 5 ||
-                    client.readBuffer.compare(client.readBuffer.size() - 5, 5, "0\r\n\r\n") != 0)
-                    requestComplete = false;
+                requestComplete = parseChunkedIncremental(client);
+
+                if (maxBody > 0 && client.chunkDecodedBody.size() > maxBody)
+                {
+                    HttpResponse res;
+                    res.setStatusCode(413);
+                    res.setBody("<html><body><h1>413 Payload Too Large</h1></body></html>");
+                    res.addHeader("Content-Type", "text/html");
+
+                    client.writeBuffer = res.toString(false);
+                    client.bytesSent = 0;
+                    client.readBuffer.clear();
+                    client.headersLogged = false;
+                    client.lastBodyLogCheckpoint = 0;
+                    client.resetRequestCache();
+
+                    epoll_event ev;
+                    std::memset(&ev, 0, sizeof(ev));
+                    ev.events = EPOLLOUT;
+                    ev.data.fd = fd;
+                    epoll_ctl(this->epollFd, EPOLL_CTL_MOD, fd, &ev);
+                    return;
+                }
             }
 
             if (client.requestHasContentLength)
@@ -1106,6 +1251,17 @@ void Webserv::handleClientData(int fd)
                 client.request.swapBody(client.readBuffer);
                 requestReady = true;
             }
+        }
+        else if (client.requestIsChunked && client.chunkParseComplete)
+        {
+            client.request.setClientFd(fd);
+            client.request.setMethod(client.requestMethod);
+            client.request.setPath(client.requestPath);
+            client.request.setQuery(client.requestQuery);
+            client.request.setVersion(client.requestVersion);
+            client.request.setHeaders(client.requestHeaders);
+            client.request.swapBody(client.chunkDecodedBody);
+            requestReady = true;
         }
         else if (client.request.parse(client.readBuffer))
         {
@@ -1249,6 +1405,8 @@ void Webserv::handleClientWrite(int fd)
     }
     else if (sent < 0)
     {
+        if (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR)
+            return;
         std::cerr << RED << " [ERROR] Send failed on FD " << fd << RESET << std::endl;
         this->closeConnection(fd);
         return;
@@ -1326,6 +1484,10 @@ void Webserv::run()
     epoll_event epoll_events[100];
     while (true)
     {
+        while (waitpid(-1, NULL, WNOHANG) > 0)
+        {
+        }
+
         int nfds = epoll_wait(this->epollFd, epoll_events, 100, -1);
         if (nfds < 0)
         {
@@ -1337,9 +1499,10 @@ void Webserv::run()
         for (int i = 0; i < nfds; i++)
         {
             int fd = epoll_events[i].data.fd;
+            const bool isCgiFd = (_cgiFds.count(fd) != 0);
             if (isListeningFd(fd))
                 acceptNewConnection(fd);
-            else if (_cgiFds.count(fd))
+            else if (isCgiFd)
                 handleCgiEvent(fd, epoll_events[i].events);
             else
             {
@@ -1353,10 +1516,6 @@ void Webserv::run()
                 if (epoll_events[i].events & EPOLLOUT)
                     handleClientWrite(fd);
             }
-
-            // Limpiar y cerrar si el socket se rompe bruscamente
-            if (epoll_events[i].events & (EPOLLHUP | EPOLLERR))
-                closeConnection(fd);
         }
     }
 }

@@ -6,7 +6,7 @@
 /*   By: macastro <macastro@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2025/12/10 20:21:23 by msoriano          #+#    #+#             */
-/*   Updated: 2026/04/12 19:06:10 by macastro         ###   ########.fr       */
+/*   Updated: 2026/04/12 21:17:33 by macastro         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -59,15 +59,17 @@ struct CgiContext
     int inFd;     // Pipe to send request body to CGI (the CGI reads from this fd as its stdin)
     int outFd;    // Pipe to read the response from CGI (what the CGI writes to its stdout)
     std::string writeBuffer;
+    size_t writeOffset;
     size_t bytesWritten;
+    size_t progressLogCheckpoint;
     bool inputFinished;
     bool inputRegistered;
     std::string rawResponse;
     pid_t pid;
 
     CgiContext()
-        : clientFd(-1), inFd(-1), outFd(-1), bytesWritten(0), inputFinished(false),
-          inputRegistered(false), pid(-1)
+        : clientFd(-1), inFd(-1), outFd(-1), writeOffset(0), bytesWritten(0),
+          progressLogCheckpoint(0), inputFinished(false), inputRegistered(false), pid(-1)
     {
     }
 };
@@ -113,6 +115,12 @@ struct ClientState
     bool requestHasContentLength;
     size_t requestBodyLength;
     bool requestIsChunked;
+    bool chunkParseInitialized;
+    size_t chunkParsePos;
+    size_t chunkCurrentSize;
+    int chunkParseState;
+    bool chunkParseComplete;
+    std::string chunkDecodedBody;
     bool cgiStreaming;
     size_t cgiReceivedBody;
     CgiContext* cgiCtx;
@@ -121,9 +129,20 @@ struct ClientState
     ClientState()
         : fd(-1), isRequestFinished(false), headersLogged(false), lastBodyLogCheckpoint(0),
           requestMetaParsed(false), requestHeadersEnd(0), requestHasContentLength(false),
-          requestBodyLength(0), requestIsChunked(false), cgiStreaming(false), cgiReceivedBody(0),
-          cgiCtx(NULL), cgiReadPaused(false)
+          requestBodyLength(0), requestIsChunked(false), chunkParseInitialized(false),
+          chunkParsePos(0), chunkCurrentSize(0), chunkParseState(0), chunkParseComplete(false),
+          cgiStreaming(false), cgiReceivedBody(0), cgiCtx(NULL), cgiReadPaused(false)
     {
+    }
+
+    void resetChunkParseState()
+    {
+        chunkParseInitialized = false;
+        chunkParsePos = 0;
+        chunkCurrentSize = 0;
+        chunkParseState = 0;
+        chunkParseComplete = false;
+        chunkDecodedBody.clear();
     }
 
     void resetRequestCache()
@@ -138,6 +157,7 @@ struct ClientState
         requestHasContentLength = false;
         requestBodyLength = 0;
         requestIsChunked = false;
+        resetChunkParseState();
     }
 
     void resetCgiStreamState()
@@ -171,6 +191,7 @@ class Webserv
     void destroyCgiContext(CgiContext* ctx, bool killProcess);
     void finalizeCgiResponse(CgiContext* ctx, int fd);
     void handleCgiEvent(int fd, uint32_t events);
+    bool parseChunkedIncremental(ClientState& client);
     void handleClientData(int fd);
     void handleClientWrite(int fd);
     void closeConnection(int fd);
