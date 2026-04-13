@@ -6,7 +6,7 @@
 /*   By: macastro <macastro@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/01/08 18:51:13 by angnavar          #+#    #+#             */
-/*   Updated: 2026/04/13 23:36:24 by macastro         ###   ########.fr       */
+/*   Updated: 2026/04/13 23:52:13 by macastro         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -771,12 +771,7 @@ void Webserv::handleCgiEvent(int fd, uint32_t events)
             }
             else
             {
-                // AQUÍ PARAMOS LAS 'E': Si falla, sacamos el FD de epoll
-                epoll_ctl(this->epollFd, EPOLL_CTL_DEL, fd, NULL);
-                _cgiFds.erase(fd);
-                close(fd);
-                ctx->inFd = -1;
-                ctx->inputRegistered = false;
+                closeCgiPipe(ctx, ctx->inFd);
                 return;
             }
         }
@@ -811,10 +806,7 @@ void Webserv::handleCgiEvent(int fd, uint32_t events)
         }
         else
         {
-            epoll_ctl(this->epollFd, EPOLL_CTL_DEL, fd, NULL);
-            _cgiFds.erase(fd);
-            close(fd);
-            ctx->outFd = -1;
+            closeCgiPipe(ctx, ctx->outFd);
         }
     }
 }
