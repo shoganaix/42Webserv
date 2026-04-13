@@ -12,6 +12,13 @@ RUN_ID=$(date '+%Y-%m-%d %H:%M:%S')
 TEST_STATUS="failed"
 CURRENT_TEST="(waiting for tester)"
 CURRENT_TEST_START_EPOCH=$TEST_START_EPOCH
+CURRENT_TEST_ACTIVE=0
+TESTS_STARTED=0
+TESTS_COMPLETED=0
+LONGEST_TEST=""
+LONGEST_TEST_ELAPSED=0
+HEAVY_TEST="Test multiple workers(20) doing multiple times(5): Post on /directory/youpi.bla with size 100000000"
+HEAVY_TEST_ELAPSED=-1
 HEARTBEAT_PID=""
 SERVER_PID=""
 TESTER_PID=""
@@ -23,6 +30,30 @@ mkdir -p "$LOG_DIR"
 log_run() {
   printf '%s\n' "$1" >> "$RUN_LOG_FILE"
   printf '%s\n' "$1" >> "$LOG_FILE"
+}
+
+close_current_test() {
+  if [ "$CURRENT_TEST_ACTIVE" -ne 1 ]; then
+    return
+  fi
+
+  local now elapsed
+  now=$(date +%s)
+  elapsed=$((now - CURRENT_TEST_START_EPOCH))
+
+  log_run "[RUN-TEST-END] run=\"$RUN_ID\" test=\"$CURRENT_TEST\" elapsed=\"${elapsed}s\""
+
+  TESTS_COMPLETED=$((TESTS_COMPLETED + 1))
+  if [ "$elapsed" -gt "$LONGEST_TEST_ELAPSED" ]; then
+    LONGEST_TEST_ELAPSED=$elapsed
+    LONGEST_TEST="$CURRENT_TEST"
+  fi
+
+  if [ "$CURRENT_TEST" = "$HEAVY_TEST" ]; then
+    HEAVY_TEST_ELAPSED=$elapsed
+  fi
+
+  CURRENT_TEST_ACTIVE=0
 }
 
 echo "[INFO] Iniciando servidor..."
@@ -49,6 +80,8 @@ on_exit() {
     IFS='|' read -r CURRENT_TEST CURRENT_TEST_START_EPOCH < "$TEST_STATE_FILE" || true
   fi
 
+  close_current_test
+
   cleanup
 
   local end_epoch end_time elapsed summary
@@ -65,6 +98,7 @@ on_exit() {
   fi
 
   echo "$summary"
+  log_run "[RUN-SUMMARY] run='$RUN_ID' tests_started='$TESTS_STARTED' tests_completed='$TESTS_COMPLETED' longest_test='$LONGEST_TEST' longest_test_elapsed='${LONGEST_TEST_ELAPSED}s' heavy_test_elapsed='${HEAVY_TEST_ELAPSED}s'"
   log_run "[RUN-END] run='$RUN_ID' end='$end_time' status='$TEST_STATUS' elapsed='${elapsed}s' last_test='$CURRENT_TEST' last_test_elapsed='$(( end_epoch - CURRENT_TEST_START_EPOCH ))s'"
   rm -f "$TEST_STATE_FILE" 2>/dev/null || true
 }
@@ -147,13 +181,18 @@ while IFS= read -r raw_line <&3 || [ -n "$raw_line" ]; do
 
   case "$line" in
     *Test\ *)
+      close_current_test
       CURRENT_TEST="Test ${line#*Test }"
       CURRENT_TEST_START_EPOCH=$(date +%s)
+      CURRENT_TEST_ACTIVE=1
+      TESTS_STARTED=$((TESTS_STARTED + 1))
       printf '%s|%s\n' "$CURRENT_TEST" "$CURRENT_TEST_START_EPOCH" > "$TEST_STATE_FILE"
       log_run "[RUN-TEST-START] run=\"$RUN_ID\" test=\"$CURRENT_TEST\" start=\"$(date '+%Y-%m-%d %H:%M:%S')\""
       ;;
   esac
 done
+
+close_current_test
 
 if wait "$TESTER_PID"; then
   TESTER_STATUS=0
