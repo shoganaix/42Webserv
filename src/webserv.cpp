@@ -6,7 +6,7 @@
 /*   By: macastro <macastro@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/01/08 18:51:13 by angnavar          #+#    #+#             */
-/*   Updated: 2026/04/13 20:12:41 by macastro         ###   ########.fr       */
+/*   Updated: 2026/04/13 23:36:24 by macastro         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -188,24 +188,11 @@ void Webserv::destroyCgiContext(CgiContext* ctx, bool killProcess)
     {
         ClientState& client = this->clients[ctx->clientFd];
         if (client.cgiCtx == ctx)
-            client.resetCgiStreamState();
+            detachCgiContext(client);
     }
 
-    if (ctx->inFd != -1)
-    {
-        epoll_ctl(this->epollFd, EPOLL_CTL_DEL, ctx->inFd, NULL);
-        _cgiFds.erase(ctx->inFd);
-        close(ctx->inFd);
-        ctx->inFd = -1;
-    }
-
-    if (ctx->outFd != -1)
-    {
-        epoll_ctl(this->epollFd, EPOLL_CTL_DEL, ctx->outFd, NULL);
-        _cgiFds.erase(ctx->outFd);
-        close(ctx->outFd);
-        ctx->outFd = -1;
-    }
+    closeCgiPipe(ctx, ctx->inFd);
+    closeCgiPipe(ctx, ctx->outFd);
 
     if (killProcess && ctx->pid > 0)
         kill(ctx->pid, SIGKILL);
@@ -214,6 +201,28 @@ void Webserv::destroyCgiContext(CgiContext* ctx, bool killProcess)
         waitpid(ctx->pid, NULL, WNOHANG);
 
     delete ctx;
+}
+
+void Webserv::detachCgiContext(ClientState& client)
+{
+    if (client.cgiCtx)
+        client.resetCgiStreamState();
+}
+
+void Webserv::closeCgiPipe(CgiContext* ctx, int& pipeFd)
+{
+    if (!ctx || pipeFd == -1)
+        return;
+
+    int oldFd = pipeFd;
+    epoll_ctl(this->epollFd, EPOLL_CTL_DEL, oldFd, NULL);
+    _cgiFds.erase(oldFd);
+    close(oldFd);
+
+    if (ctx->inFd == oldFd)
+        ctx->inputRegistered = false;
+
+    pipeFd = -1;
 }
 
 /*
@@ -578,10 +587,7 @@ HttpResponse Webserv::routeRequest(const HttpRequest& req, const Config& server)
                 // y si no hay body, el pipe se queda esperando a que le escriban algo que nunca
                 // llega. Al cerrar el pipe, el CGI recibe un EOF y empieza a ejecutarse
                 // directamente. Esto envía un EOF al binario CGI y lo desbloquea.
-                epoll_ctl(this->epollFd, EPOLL_CTL_DEL, ctx->inFd, NULL);
-                close(ctx->inFd);
-                _cgiFds.erase(ctx->inFd);
-                ctx->inFd = -1;
+                closeCgiPipe(ctx, ctx->inFd);
             }
             else
             {
@@ -685,11 +691,7 @@ void Webserv::syncCgiInputFdState(CgiContext* ctx)
 
     if (getCgiPendingBytes(ctx) == 0 && ctx->inputFinished)
     {
-        epoll_ctl(this->epollFd, EPOLL_CTL_DEL, ctx->inFd, NULL);
-        _cgiFds.erase(ctx->inFd);
-        close(ctx->inFd);
-        ctx->inFd = -1;
-        ctx->inputRegistered = false;
+        closeCgiPipe(ctx, ctx->inFd);
     }
     else if (getCgiPendingBytes(ctx) == 0 && !ctx->inputFinished && ctx->inputRegistered)
     {
@@ -699,9 +701,24 @@ void Webserv::syncCgiInputFdState(CgiContext* ctx)
     }
 }
 
+void Webserv::updateCgiBackpressure(ClientState& client, CgiContext* ctx)
+{
+    const size_t kCgiBufferHighWatermark = 512 * 1024;
+    const size_t kCgiBufferLowWatermark = 128 * 1024;
+
+    if (!ctx || client.cgiCtx != ctx)
+        return;
+
+    const size_t pending = getCgiPendingBytes(ctx);
+
+    if (!client.cgiReadPaused && pending >= kCgiBufferHighWatermark)
+        client.cgiReadPaused = true;
+    else if (client.cgiReadPaused && pending <= kCgiBufferLowWatermark)
+        client.cgiReadPaused = false;
+}
+
 void Webserv::handleCgiEvent(int fd, uint32_t events)
 {
-    const size_t kCgiBufferLowWatermark = 128 * 1024;
     const size_t kCgiProgressStepBytes = 10 * 1024 * 1024;
 
     if (_cgiFds.find(fd) == _cgiFds.end())
@@ -745,9 +762,7 @@ void Webserv::handleCgiEvent(int fd, uint32_t events)
                 if (this->clients.count(ctx->clientFd))
                 {
                     ClientState& client = this->clients[ctx->clientFd];
-                    if (client.cgiCtx == ctx && client.cgiReadPaused &&
-                        getCgiPendingBytes(ctx) <= kCgiBufferLowWatermark)
-                        client.cgiReadPaused = false;
+                    updateCgiBackpressure(client, ctx);
                 }
             }
             else if (n < 0 && (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR))
@@ -811,7 +826,6 @@ void Webserv::handleCgiEvent(int fd, uint32_t events)
  */
 void Webserv::handleClientData(int fd)
 {
-    const size_t kCgiBufferHighWatermark = 512 * 1024;
     const size_t kProgressLogStepBytes = 5 * 1024 * 1024;
 
     if (this->clients.find(fd) == this->clients.end())
@@ -843,7 +857,44 @@ void Webserv::handleClientData(int fd)
     if (client.cgiStreaming && client.cgiCtx)
     {
         CgiContext* ctx = client.cgiCtx;
-        if (!client.readBuffer.empty())
+        if (client.requestIsChunked)
+        {
+            bool chunkComplete = false;
+            try
+            {
+                chunkComplete = parseChunkedIncremental(client);
+            }
+            catch (std::exception&)
+            {
+                this->closeConnection(fd);
+                return;
+            }
+
+            if (client.chunkDecodedBody.size() > client.cgiChunkForwarded)
+            {
+                const size_t delta = client.chunkDecodedBody.size() - client.cgiChunkForwarded;
+                ctx->writeBuffer.append(client.chunkDecodedBody, client.cgiChunkForwarded, delta);
+                client.cgiChunkForwarded = client.chunkDecodedBody.size();
+                client.cgiReceivedBody += delta;
+                registerCgiInputFd(ctx);
+            }
+
+            if (chunkComplete)
+                ctx->inputFinished = true;
+
+            if (client.chunkParsePos > 65536 &&
+                client.chunkParsePos >= client.readBuffer.size() / 2)
+            {
+                client.readBuffer.erase(0, client.chunkParsePos);
+                client.chunkParsePos = 0;
+            }
+            else if (chunkComplete)
+            {
+                client.readBuffer.clear();
+                client.chunkParsePos = 0;
+            }
+        }
+        else if (!client.readBuffer.empty())
         {
             ctx->writeBuffer.append(client.readBuffer);
             client.cgiReceivedBody += client.readBuffer.size();
@@ -851,11 +902,10 @@ void Webserv::handleClientData(int fd)
             registerCgiInputFd(ctx);
         }
 
-        if (client.cgiReceivedBody >= client.requestBodyLength)
+        if (!client.requestIsChunked && client.cgiReceivedBody >= client.requestBodyLength)
             ctx->inputFinished = true;
 
-        if (!client.cgiReadPaused && getCgiPendingBytes(ctx) >= kCgiBufferHighWatermark)
-            client.cgiReadPaused = true;
+        updateCgiBackpressure(client, ctx);
 
         syncCgiInputFdState(ctx);
 
@@ -1097,8 +1147,8 @@ void Webserv::handleClientData(int fd)
                 }
             }
 
-            if (!client.cgiStreaming && loc && method == "POST" && client.requestHasContentLength &&
-                !client.requestIsChunked)
+            if (!client.cgiStreaming && loc && method == "POST" &&
+                (client.requestHasContentLength || client.requestIsChunked))
             {
                 ResolvedPath resolved = resolvePath(*loc, path);
                 if (isCgiRequest(*loc, resolved.fsPath))
@@ -1137,22 +1187,50 @@ void Webserv::handleClientData(int fd)
                             client.cgiStreaming = true;
                             client.cgiCtx = ctx;
                             client.cgiReceivedBody = 0;
+                            client.cgiChunkForwarded = 0;
                             client.cgiReadPaused = false;
 
-                            if (bodyAvailable > 0)
+                            if (client.requestIsChunked)
                             {
-                                ctx->writeBuffer.append(client.readBuffer, bodyStart,
-                                                        client.readBuffer.size() - bodyStart);
-                                client.cgiReceivedBody += client.readBuffer.size() - bodyStart;
-                                registerCgiInputFd(ctx);
+                                bool chunkComplete = parseChunkedIncremental(client);
+                                if (!client.chunkDecodedBody.empty())
+                                {
+                                    ctx->writeBuffer.append(client.chunkDecodedBody);
+                                    client.cgiChunkForwarded = client.chunkDecodedBody.size();
+                                    client.cgiReceivedBody = client.chunkDecodedBody.size();
+                                    registerCgiInputFd(ctx);
+                                }
+
+                                if (chunkComplete)
+                                    ctx->inputFinished = true;
+
+                                if (client.chunkParsePos > 65536 &&
+                                    client.chunkParsePos >= client.readBuffer.size() / 2)
+                                {
+                                    client.readBuffer.erase(0, client.chunkParsePos);
+                                    client.chunkParsePos = 0;
+                                }
+                                else if (chunkComplete)
+                                {
+                                    client.readBuffer.clear();
+                                    client.chunkParsePos = 0;
+                                }
+                            }
+                            else
+                            {
+                                if (bodyAvailable > 0)
+                                {
+                                    ctx->writeBuffer.append(client.readBuffer, bodyStart,
+                                                            client.readBuffer.size() - bodyStart);
+                                    client.cgiReceivedBody += client.readBuffer.size() - bodyStart;
+                                    registerCgiInputFd(ctx);
+                                }
+
+                                if (client.cgiReceivedBody >= client.requestBodyLength)
+                                    ctx->inputFinished = true;
                             }
 
-                            if (client.cgiReceivedBody >= client.requestBodyLength)
-                                ctx->inputFinished = true;
-
-                            if (!client.cgiReadPaused &&
-                                getCgiPendingBytes(ctx) >= kCgiBufferHighWatermark)
-                                client.cgiReadPaused = true;
+                            updateCgiBackpressure(client, ctx);
 
                             syncCgiInputFdState(ctx);
 
@@ -1437,11 +1515,8 @@ void Webserv::closeConnection(int fd)
             }
             if (!alreadyQueued)
                 contextsToDestroy.push_back(ctx);
-
-            _cgiFds.erase(it++);
         }
-        else
-            ++it;
+        ++it;
     }
 
     for (size_t i = 0; i < contextsToDestroy.size(); ++i)
