@@ -99,7 +99,10 @@ heartbeat_loop() {
       IFS='|' read -r CURRENT_TEST CURRENT_TEST_START_EPOCH < "$TEST_STATE_FILE" || true
     fi
 
-    cgi_done=$(grep -c "\[CGI-DONE\]" "$LOG_FILE" 2>/dev/null || printf '0')
+    cgi_done=$(grep -a -c "\[CGI-DONE\]" "$LOG_FILE" 2>/dev/null || true)
+    case "$cgi_done" in
+      ''|*[!0-9]*) cgi_done=0 ;;
+    esac
     if [ "$cgi_done" -gt "$last_cgi_done" ]; then
       last_cgi_done=$cgi_done
       last_progress_epoch=$heartbeat_now

@@ -6,7 +6,7 @@
 /*   By: macastro <macastro@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2025/12/10 20:21:23 by msoriano          #+#    #+#             */
-/*   Updated: 2026/04/12 21:17:33 by macastro         ###   ########.fr       */
+/*   Updated: 2026/04/13 20:12:41 by macastro         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -190,6 +190,8 @@ class Webserv
     void acceptNewConnection(int fd);
     void destroyCgiContext(CgiContext* ctx, bool killProcess);
     void finalizeCgiResponse(CgiContext* ctx, int fd);
+    void registerCgiInputFd(CgiContext* ctx);
+    void syncCgiInputFdState(CgiContext* ctx);
     void handleCgiEvent(int fd, uint32_t events);
     bool parseChunkedIncremental(ClientState& client);
     void handleClientData(int fd);

@@ -6,7 +6,7 @@
 /*   By: macastro <macastro@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/01/08 18:51:13 by angnavar          #+#    #+#             */
-/*   Updated: 2026/04/13 17:39:45 by macastro         ###   ########.fr       */
+/*   Updated: 2026/04/13 20:12:41 by macastro         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -662,6 +662,43 @@ void Webserv::finalizeCgiResponse(CgiContext* ctx, int fd)
     destroyCgiContext(ctx, false);
 }
 
+void Webserv::registerCgiInputFd(CgiContext* ctx)
+{
+    if (!ctx || ctx->inFd == -1 || ctx->inputRegistered)
+        return;
+
+    struct epoll_event evIn;
+    std::memset(&evIn, 0, sizeof(evIn));
+    evIn.events = EPOLLOUT;
+    evIn.data.fd = ctx->inFd;
+    if (epoll_ctl(this->epollFd, EPOLL_CTL_ADD, ctx->inFd, &evIn) == 0)
+    {
+        this->_cgiFds[ctx->inFd] = ctx;
+        ctx->inputRegistered = true;
+    }
+}
+
+void Webserv::syncCgiInputFdState(CgiContext* ctx)
+{
+    if (!ctx || ctx->inFd == -1)
+        return;
+
+    if (getCgiPendingBytes(ctx) == 0 && ctx->inputFinished)
+    {
+        epoll_ctl(this->epollFd, EPOLL_CTL_DEL, ctx->inFd, NULL);
+        _cgiFds.erase(ctx->inFd);
+        close(ctx->inFd);
+        ctx->inFd = -1;
+        ctx->inputRegistered = false;
+    }
+    else if (getCgiPendingBytes(ctx) == 0 && !ctx->inputFinished && ctx->inputRegistered)
+    {
+        epoll_ctl(this->epollFd, EPOLL_CTL_DEL, ctx->inFd, NULL);
+        _cgiFds.erase(ctx->inFd);
+        ctx->inputRegistered = false;
+    }
+}
+
 void Webserv::handleCgiEvent(int fd, uint32_t events)
 {
     const size_t kCgiBufferLowWatermark = 128 * 1024;
@@ -729,22 +766,7 @@ void Webserv::handleCgiEvent(int fd, uint32_t events)
             }
         }
 
-        if (ctx->inFd != -1 && getCgiPendingBytes(ctx) == 0 && ctx->inputFinished)
-        {
-            epoll_ctl(this->epollFd, EPOLL_CTL_DEL, fd, NULL);
-            _cgiFds.erase(fd);
-            close(fd);
-            ctx->inFd = -1;
-            ctx->inputRegistered = false;
-            // No hacemos return para que pueda leer en esta misma vuelta
-        }
-        else if (ctx->inFd != -1 && getCgiPendingBytes(ctx) == 0 && !ctx->inputFinished &&
-                 ctx->inputRegistered)
-        {
-            epoll_ctl(this->epollFd, EPOLL_CTL_DEL, fd, NULL);
-            _cgiFds.erase(fd);
-            ctx->inputRegistered = false;
-        }
+        syncCgiInputFdState(ctx);
     }
 
     // --- 2. LECTURA DEL CGI (Desde el outFd / Pipe 9) ---
@@ -826,17 +848,7 @@ void Webserv::handleClientData(int fd)
             ctx->writeBuffer.append(client.readBuffer);
             client.cgiReceivedBody += client.readBuffer.size();
             client.readBuffer.clear();
-
-            if (ctx->inFd != -1 && !ctx->inputRegistered)
-            {
-                struct epoll_event evIn;
-                std::memset(&evIn, 0, sizeof(evIn));
-                evIn.events = EPOLLOUT;
-                evIn.data.fd = ctx->inFd;
-                epoll_ctl(this->epollFd, EPOLL_CTL_ADD, ctx->inFd, &evIn);
-                this->_cgiFds[ctx->inFd] = ctx;
-                ctx->inputRegistered = true;
-            }
+            registerCgiInputFd(ctx);
         }
 
         if (client.cgiReceivedBody >= client.requestBodyLength)
@@ -845,13 +857,7 @@ void Webserv::handleClientData(int fd)
         if (!client.cgiReadPaused && getCgiPendingBytes(ctx) >= kCgiBufferHighWatermark)
             client.cgiReadPaused = true;
 
-        if (ctx->inputFinished && ctx->inFd != -1 && getCgiPendingBytes(ctx) == 0 &&
-            !ctx->inputRegistered)
-        {
-            _cgiFds.erase(ctx->inFd);
-            close(ctx->inFd);
-            ctx->inFd = -1;
-        }
+        syncCgiInputFdState(ctx);
 
         return;
     }
@@ -1138,16 +1144,7 @@ void Webserv::handleClientData(int fd)
                                 ctx->writeBuffer.append(client.readBuffer, bodyStart,
                                                         client.readBuffer.size() - bodyStart);
                                 client.cgiReceivedBody += client.readBuffer.size() - bodyStart;
-
-                                if (ctx->inFd != -1 && !ctx->inputRegistered)
-                                {
-                                    struct epoll_event evIn;
-                                    std::memset(&evIn, 0, sizeof(evIn));
-                                    evIn.events = EPOLLOUT;
-                                    evIn.data.fd = ctx->inFd;
-                                    epoll_ctl(this->epollFd, EPOLL_CTL_ADD, ctx->inFd, &evIn);
-                                    ctx->inputRegistered = true;
-                                }
+                                registerCgiInputFd(ctx);
                             }
 
                             if (client.cgiReceivedBody >= client.requestBodyLength)
@@ -1157,13 +1154,7 @@ void Webserv::handleClientData(int fd)
                                 getCgiPendingBytes(ctx) >= kCgiBufferHighWatermark)
                                 client.cgiReadPaused = true;
 
-                            if (ctx->inputFinished && ctx->inFd != -1 &&
-                                getCgiPendingBytes(ctx) == 0 && !ctx->inputRegistered)
-                            {
-                                _cgiFds.erase(ctx->inFd);
-                                close(ctx->inFd);
-                                ctx->inFd = -1;
-                            }
+                            syncCgiInputFdState(ctx);
 
                             client.readBuffer.clear();
                             return;
