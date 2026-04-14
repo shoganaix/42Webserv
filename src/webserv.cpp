@@ -6,7 +6,7 @@
 /*   By: macastro <macastro@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/01/08 18:51:13 by angnavar          #+#    #+#             */
-/*   Updated: 2026/04/14 23:55:26 by macastro         ###   ########.fr       */
+/*   Updated: 2026/04/15 00:43:38 by macastro         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -205,8 +205,11 @@ void Webserv::destroyCgiContext(CgiContext* ctx, bool killProcess)
 
 void Webserv::detachCgiContext(ClientState& client)
 {
-    if (client.cgiCtx)
-        client.resetCgiStreamState();
+    if (!client.cgiCtx)
+        return;
+
+    client.resetCgiStreamState();
+    syncClientEpollInterest(client);
 }
 
 void Webserv::closeCgiPipe(CgiContext* ctx, int& pipeFd)
