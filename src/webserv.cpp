@@ -6,7 +6,7 @@
 /*   By: macastro <macastro@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/01/08 18:51:13 by angnavar          #+#    #+#             */
-/*   Updated: 2026/04/14 20:26:42 by macastro         ###   ########.fr       */
+/*   Updated: 2026/04/14 20:34:41 by macastro         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -884,12 +884,7 @@ void Webserv::handleClientData(int fd, uint32_t events)
 
     if (this->clients.find(fd) == this->clients.end())
         return;
-
-    if (events & (EPOLLERR | EPOLLHUP))
-    {
-        this->closeConnection(fd);
-        return;
-    }
+    (void)events;
 
     ClientState& client = this->clients[fd];
     if (client.cgiStreaming && client.cgiCtx && client.cgiReadPaused)
@@ -1403,12 +1398,7 @@ void Webserv::handleClientWrite(int fd, uint32_t events)
 {
     if (this->clients.find(fd) == this->clients.end())
         return;
-
-    if (events & (EPOLLERR | EPOLLHUP))
-    {
-        this->closeConnection(fd);
-        return;
-    }
+    (void)events;
 
     ClientState& client = this->clients[fd];
 
@@ -1555,7 +1545,7 @@ void Webserv::run()
                 if (hasWrite && this->clients.count(fd))
                     handleClientWrite(fd, events);
 
-                if (hasHangOrErr && !hasRead && !hasWrite && this->clients.count(fd))
+                if (hasHangOrErr && this->clients.count(fd))
                 {
                     closeConnection(fd);
                     continue;
