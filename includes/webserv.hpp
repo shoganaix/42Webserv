@@ -6,7 +6,7 @@
 /*   By: macastro <macastro@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2025/12/10 20:21:23 by msoriano          #+#    #+#             */
-/*   Updated: 2026/04/13 23:36:24 by macastro         ###   ########.fr       */
+/*   Updated: 2026/04/14 10:26:41 by macastro         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -198,6 +198,8 @@ class Webserv
     void registerCgiInputFd(CgiContext* ctx);
     void syncCgiInputFdState(CgiContext* ctx);
     void updateCgiBackpressure(ClientState& client, CgiContext* ctx);
+    void streamClientBodyToCgi(ClientState& client, CgiContext* ctx, bool includeBodyFromHeaders,
+                               size_t bodyStart);
     void handleCgiEvent(int fd, uint32_t events);
     bool parseChunkedIncremental(ClientState& client);
     void handleClientData(int fd);

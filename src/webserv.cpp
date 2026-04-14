@@ -6,7 +6,7 @@
 /*   By: macastro <macastro@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/01/08 18:51:13 by angnavar          #+#    #+#             */
-/*   Updated: 2026/04/14 09:29:32 by macastro         ###   ########.fr       */
+/*   Updated: 2026/04/14 10:26:41 by macastro         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -673,11 +673,15 @@ void Webserv::registerCgiInputFd(CgiContext* ctx)
     if (!ctx || ctx->inFd == -1 || ctx->inputRegistered)
         return;
 
+    if (getCgiPendingBytes(ctx) == 0)
+        return;
+
     struct epoll_event evIn;
     std::memset(&evIn, 0, sizeof(evIn));
     evIn.events = EPOLLOUT;
     evIn.data.fd = ctx->inFd;
-    if (epoll_ctl(this->epollFd, EPOLL_CTL_ADD, ctx->inFd, &evIn) == 0)
+    int rc = epoll_ctl(this->epollFd, EPOLL_CTL_ADD, ctx->inFd, &evIn);
+    if (rc == 0 || errno == EEXIST)
     {
         this->_cgiFds[ctx->inFd] = ctx;
         ctx->inputRegistered = true;
@@ -699,6 +703,72 @@ void Webserv::syncCgiInputFdState(CgiContext* ctx)
         _cgiFds.erase(ctx->inFd);
         ctx->inputRegistered = false;
     }
+    else if (getCgiPendingBytes(ctx) > 0 && !ctx->inputRegistered)
+    {
+        registerCgiInputFd(ctx);
+    }
+}
+
+void Webserv::streamClientBodyToCgi(ClientState& client, CgiContext* ctx,
+                                    bool includeBodyFromHeaders, size_t bodyStart)
+{
+    if (!ctx)
+        return;
+
+    if (client.requestIsChunked)
+    {
+        bool chunkComplete = parseChunkedIncremental(client);
+
+        if (client.chunkDecodedBody.size() > client.cgiChunkForwarded)
+        {
+            const size_t delta = client.chunkDecodedBody.size() - client.cgiChunkForwarded;
+            ctx->writeBuffer.append(client.chunkDecodedBody, client.cgiChunkForwarded, delta);
+            client.cgiChunkForwarded = client.chunkDecodedBody.size();
+            client.cgiReceivedBody += delta;
+            registerCgiInputFd(ctx);
+        }
+
+        if (chunkComplete)
+            ctx->inputFinished = true;
+
+        if (client.chunkParsePos > 65536 && client.chunkParsePos >= client.readBuffer.size() / 2)
+        {
+            client.readBuffer.erase(0, client.chunkParsePos);
+            client.chunkParsePos = 0;
+        }
+        else if (chunkComplete)
+        {
+            client.readBuffer.clear();
+            client.chunkParsePos = 0;
+        }
+    }
+    else
+    {
+        if (includeBodyFromHeaders)
+        {
+            if (client.readBuffer.size() > bodyStart)
+            {
+                const size_t payload = client.readBuffer.size() - bodyStart;
+                ctx->writeBuffer.append(client.readBuffer, bodyStart, payload);
+                client.cgiReceivedBody += payload;
+                registerCgiInputFd(ctx);
+            }
+            client.readBuffer.clear();
+        }
+        else if (!client.readBuffer.empty())
+        {
+            ctx->writeBuffer.append(client.readBuffer);
+            client.cgiReceivedBody += client.readBuffer.size();
+            client.readBuffer.clear();
+            registerCgiInputFd(ctx);
+        }
+
+        if (client.cgiReceivedBody >= client.requestBodyLength)
+            ctx->inputFinished = true;
+    }
+
+    updateCgiBackpressure(client, ctx);
+    syncCgiInputFdState(ctx);
 }
 
 void Webserv::updateCgiBackpressure(ClientState& client, CgiContext* ctx)
@@ -836,57 +906,15 @@ void Webserv::handleClientData(int fd)
     if (client.cgiStreaming && client.cgiCtx)
     {
         CgiContext* ctx = client.cgiCtx;
-        if (client.requestIsChunked)
+        try
         {
-            bool chunkComplete = false;
-            try
-            {
-                chunkComplete = parseChunkedIncremental(client);
-            }
-            catch (std::exception&)
-            {
-                this->closeConnection(fd);
-                return;
-            }
-
-            if (client.chunkDecodedBody.size() > client.cgiChunkForwarded)
-            {
-                const size_t delta = client.chunkDecodedBody.size() - client.cgiChunkForwarded;
-                ctx->writeBuffer.append(client.chunkDecodedBody, client.cgiChunkForwarded, delta);
-                client.cgiChunkForwarded = client.chunkDecodedBody.size();
-                client.cgiReceivedBody += delta;
-                registerCgiInputFd(ctx);
-            }
-
-            if (chunkComplete)
-                ctx->inputFinished = true;
-
-            if (client.chunkParsePos > 65536 &&
-                client.chunkParsePos >= client.readBuffer.size() / 2)
-            {
-                client.readBuffer.erase(0, client.chunkParsePos);
-                client.chunkParsePos = 0;
-            }
-            else if (chunkComplete)
-            {
-                client.readBuffer.clear();
-                client.chunkParsePos = 0;
-            }
+            streamClientBodyToCgi(client, ctx, false, 0);
         }
-        else if (!client.readBuffer.empty())
+        catch (std::exception&)
         {
-            ctx->writeBuffer.append(client.readBuffer);
-            client.cgiReceivedBody += client.readBuffer.size();
-            client.readBuffer.clear();
-            registerCgiInputFd(ctx);
+            this->closeConnection(fd);
+            return;
         }
-
-        if (!client.requestIsChunked && client.cgiReceivedBody >= client.requestBodyLength)
-            ctx->inputFinished = true;
-
-        updateCgiBackpressure(client, ctx);
-
-        syncCgiInputFdState(ctx);
 
         return;
     }
@@ -1169,51 +1197,7 @@ void Webserv::handleClientData(int fd)
                             client.cgiChunkForwarded = 0;
                             client.cgiReadPaused = false;
 
-                            if (client.requestIsChunked)
-                            {
-                                bool chunkComplete = parseChunkedIncremental(client);
-                                if (!client.chunkDecodedBody.empty())
-                                {
-                                    ctx->writeBuffer.append(client.chunkDecodedBody);
-                                    client.cgiChunkForwarded = client.chunkDecodedBody.size();
-                                    client.cgiReceivedBody = client.chunkDecodedBody.size();
-                                    registerCgiInputFd(ctx);
-                                }
-
-                                if (chunkComplete)
-                                    ctx->inputFinished = true;
-
-                                if (client.chunkParsePos > 65536 &&
-                                    client.chunkParsePos >= client.readBuffer.size() / 2)
-                                {
-                                    client.readBuffer.erase(0, client.chunkParsePos);
-                                    client.chunkParsePos = 0;
-                                }
-                                else if (chunkComplete)
-                                {
-                                    client.readBuffer.clear();
-                                    client.chunkParsePos = 0;
-                                }
-                            }
-                            else
-                            {
-                                if (bodyAvailable > 0)
-                                {
-                                    ctx->writeBuffer.append(client.readBuffer, bodyStart,
-                                                            client.readBuffer.size() - bodyStart);
-                                    client.cgiReceivedBody += client.readBuffer.size() - bodyStart;
-                                    registerCgiInputFd(ctx);
-                                }
-
-                                if (client.cgiReceivedBody >= client.requestBodyLength)
-                                    ctx->inputFinished = true;
-                            }
-
-                            updateCgiBackpressure(client, ctx);
-
-                            syncCgiInputFdState(ctx);
-
-                            client.readBuffer.clear();
+                            streamClientBodyToCgi(client, ctx, true, bodyStart);
                             return;
                         }
                         catch (std::exception&)
