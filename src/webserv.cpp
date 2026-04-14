@@ -6,7 +6,7 @@
 /*   By: macastro <macastro@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/01/08 18:51:13 by angnavar          #+#    #+#             */
-/*   Updated: 2026/04/14 21:05:23 by macastro         ###   ########.fr       */
+/*   Updated: 2026/04/14 21:27:32 by macastro         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -784,9 +784,45 @@ void Webserv::updateCgiBackpressure(ClientState& client, CgiContext* ctx)
     const size_t pending = getCgiPendingBytes(ctx);
 
     if (!client.cgiReadPaused && pending >= kCgiBufferHighWatermark)
+    {
         client.cgiReadPaused = true;
+        syncClientEpollInterest(client);
+    }
     else if (client.cgiReadPaused && pending <= kCgiBufferLowWatermark)
+    {
         client.cgiReadPaused = false;
+        syncClientEpollInterest(client);
+    }
+}
+
+void Webserv::syncClientEpollInterest(ClientState& client)
+{
+    if (this->clients.find(client.fd) == this->clients.end())
+        return;
+
+    uint32_t events = 0;
+    const bool wantRead = !client.cgiStreaming || !client.cgiReadPaused;
+    const bool wantWrite =
+        !client.writeBuffer.empty() && client.bytesSent < client.writeBuffer.size();
+
+    if (wantRead)
+        events |= EPOLLIN;
+    if (wantWrite)
+        events |= EPOLLOUT;
+
+    if (events == 0)
+    {
+        epoll_ctl(this->epollFd, EPOLL_CTL_DEL, client.fd, NULL);
+        return;
+    }
+
+    struct epoll_event ev;
+    std::memset(&ev, 0, sizeof(ev));
+    ev.events = events;
+    ev.data.fd = client.fd;
+
+    if (epoll_ctl(this->epollFd, EPOLL_CTL_MOD, client.fd, &ev) < 0 && errno == ENOENT)
+        epoll_ctl(this->epollFd, EPOLL_CTL_ADD, client.fd, &ev);
 }
 
 void Webserv::handleCgiEvent(int fd, uint32_t events)
@@ -955,6 +991,8 @@ void Webserv::handleClientData(int fd, uint32_t events)
             client.headersLogged = false;
             client.lastBodyLogCheckpoint = 0;
             client.resetRequestCache();
+
+            syncClientEpollInterest(client);
 
             epoll_event ev;
             std::memset(&ev, 0, sizeof(ev));
@@ -1263,6 +1301,8 @@ void Webserv::handleClientData(int fd, uint32_t events)
                                 client.headersLogged = false;
                                 client.lastBodyLogCheckpoint = 0;
                                 client.resetRequestCache();
+
+                                syncClientEpollInterest(client);
 
                                 epoll_event ev;
                                 std::memset(&ev, 0, sizeof(ev));
