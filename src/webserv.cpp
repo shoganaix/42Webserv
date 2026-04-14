@@ -6,7 +6,7 @@
 /*   By: macastro <macastro@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/01/08 18:51:13 by angnavar          #+#    #+#             */
-/*   Updated: 2026/04/14 10:26:41 by macastro         ###   ########.fr       */
+/*   Updated: 2026/04/14 15:52:24 by macastro         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -1522,22 +1522,29 @@ void Webserv::run()
         for (int i = 0; i < nfds; i++)
         {
             int fd = epoll_events[i].data.fd;
+            uint32_t events = epoll_events[i].events;
             const bool isCgiFd = (_cgiFds.count(fd) != 0);
             if (isListeningFd(fd))
                 acceptNewConnection(fd);
             else if (isCgiFd)
-                handleCgiEvent(fd, epoll_events[i].events);
+                handleCgiEvent(fd, events);
             else
             {
-                if (epoll_events[i].events & (EPOLLHUP | EPOLLERR))
+                const bool hasRead = (events & EPOLLIN) != 0;
+                const bool hasWrite = (events & EPOLLOUT) != 0;
+                const bool hasHangOrErr = (events & (EPOLLHUP | EPOLLERR)) != 0;
+
+                if (hasRead)
+                    handleClientData(fd);
+
+                if (hasWrite && this->clients.count(fd))
+                    handleClientWrite(fd);
+
+                if (hasHangOrErr && !hasRead && !hasWrite && this->clients.count(fd))
                 {
                     closeConnection(fd);
                     continue;
                 }
-                if (epoll_events[i].events & EPOLLIN)
-                    handleClientData(fd);
-                if (epoll_events[i].events & EPOLLOUT)
-                    handleClientWrite(fd);
             }
         }
     }
