@@ -6,7 +6,7 @@
 /*   By: macastro <macastro@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/01/08 18:51:13 by angnavar          #+#    #+#             */
-/*   Updated: 2026/04/14 20:51:08 by macastro         ###   ########.fr       */
+/*   Updated: 2026/04/14 20:59:11 by macastro         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -930,6 +930,38 @@ void Webserv::handleClientData(int fd, uint32_t events)
             return;
         }
 
+        size_t streamingMaxBody = client.config.client_max_body_size;
+        if (!client.requestPath.empty())
+        {
+            const Location* streamingLoc = matchLocation(client.config, client.requestPath);
+            if (streamingLoc)
+                streamingMaxBody = streamingLoc->client_max_body_size;
+        }
+
+        if (streamingMaxBody > 0 && client.cgiReceivedBody > streamingMaxBody)
+        {
+            destroyCgiContext(ctx, true);
+
+            HttpResponse res;
+            res.setStatusCode(413);
+            res.setBody("<html><body><h1>413 Payload Too Large</h1></body></html>");
+            res.addHeader("Content-Type", "text/html");
+
+            client.writeBuffer = res.toString(false);
+            client.bytesSent = 0;
+            client.readBuffer.clear();
+            client.headersLogged = false;
+            client.lastBodyLogCheckpoint = 0;
+            client.resetRequestCache();
+
+            epoll_event ev;
+            std::memset(&ev, 0, sizeof(ev));
+            ev.events = EPOLLOUT;
+            ev.data.fd = fd;
+            epoll_ctl(this->epollFd, EPOLL_CTL_MOD, fd, &ev);
+            return;
+        }
+
         return;
     }
 
@@ -1212,6 +1244,32 @@ void Webserv::handleClientData(int fd, uint32_t events)
                             client.cgiReadPaused = false;
 
                             streamClientBodyToCgi(client, ctx, true, bodyStart);
+
+                            if (maxBody > 0 && client.cgiReceivedBody > maxBody)
+                            {
+                                destroyCgiContext(ctx, true);
+
+                                HttpResponse res;
+                                res.setStatusCode(413);
+                                res.setBody(
+                                    "<html><body><h1>413 Payload Too Large</h1></body></html>");
+                                res.addHeader("Content-Type", "text/html");
+
+                                client.writeBuffer = res.toString(false);
+                                client.bytesSent = 0;
+                                client.readBuffer.clear();
+                                client.headersLogged = false;
+                                client.lastBodyLogCheckpoint = 0;
+                                client.resetRequestCache();
+
+                                epoll_event ev;
+                                std::memset(&ev, 0, sizeof(ev));
+                                ev.events = EPOLLOUT;
+                                ev.data.fd = fd;
+                                epoll_ctl(this->epollFd, EPOLL_CTL_MOD, fd, &ev);
+                                return;
+                            }
+
                             return;
                         }
                         catch (std::exception&)
