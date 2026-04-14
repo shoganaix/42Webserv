@@ -6,7 +6,7 @@
 /*   By: macastro <macastro@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/01/08 18:51:13 by angnavar          #+#    #+#             */
-/*   Updated: 2026/04/14 21:27:32 by macastro         ###   ########.fr       */
+/*   Updated: 2026/04/14 21:52:10 by macastro         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -1511,7 +1511,6 @@ void Webserv::handleClientWrite(int fd, uint32_t events)
 {
     if (this->clients.find(fd) == this->clients.end())
         return;
-    (void)events;
 
     ClientState& client = this->clients[fd];
 
@@ -1552,7 +1551,8 @@ void Webserv::handleClientWrite(int fd, uint32_t events)
     }
     else if (sent < 0)
     {
-        this->closeConnection(fd);
+        if (events & (EPOLLERR | EPOLLHUP))
+            this->closeConnection(fd);
         return;
     }
 
