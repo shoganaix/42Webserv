@@ -6,7 +6,7 @@
 /*   By: macastro <macastro@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2025/12/10 20:21:23 by msoriano          #+#    #+#             */
-/*   Updated: 2026/04/14 10:26:41 by macastro         ###   ########.fr       */
+/*   Updated: 2026/04/14 20:19:13 by macastro         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -202,7 +202,7 @@ class Webserv
                                size_t bodyStart);
     void handleCgiEvent(int fd, uint32_t events);
     bool parseChunkedIncremental(ClientState& client);
-    void handleClientData(int fd);
+    void handleClientData(int fd, uint32_t events);
     void handleClientWrite(int fd);
     void closeConnection(int fd);
     HttpResponse routeRequest(const HttpRequest& req, const Config& server);
