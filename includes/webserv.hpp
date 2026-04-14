@@ -6,7 +6,7 @@
 /*   By: macastro <macastro@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2025/12/10 20:21:23 by msoriano          #+#    #+#             */
-/*   Updated: 2026/04/12 21:17:33 by macastro         ###   ########.fr       */
+/*   Updated: 2026/04/14 23:27:03 by macastro         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -123,6 +123,7 @@ struct ClientState
     std::string chunkDecodedBody;
     bool cgiStreaming;
     size_t cgiReceivedBody;
+    size_t cgiChunkForwarded;
     CgiContext* cgiCtx;
     bool cgiReadPaused;
 
@@ -131,7 +132,8 @@ struct ClientState
           requestMetaParsed(false), requestHeadersEnd(0), requestHasContentLength(false),
           requestBodyLength(0), requestIsChunked(false), chunkParseInitialized(false),
           chunkParsePos(0), chunkCurrentSize(0), chunkParseState(0), chunkParseComplete(false),
-          cgiStreaming(false), cgiReceivedBody(0), cgiCtx(NULL), cgiReadPaused(false)
+          cgiStreaming(false), cgiReceivedBody(0), cgiChunkForwarded(0), cgiCtx(NULL),
+          cgiReadPaused(false)
     {
     }
 
@@ -164,6 +166,7 @@ struct ClientState
     {
         cgiStreaming = false;
         cgiReceivedBody = 0;
+        cgiChunkForwarded = 0;
         cgiCtx = NULL;
         cgiReadPaused = false;
     }
@@ -189,11 +192,20 @@ class Webserv
     bool isListeningFd(int fd);
     void acceptNewConnection(int fd);
     void destroyCgiContext(CgiContext* ctx, bool killProcess);
+    void detachCgiContext(ClientState& client);
+    void closeCgiPipe(CgiContext* ctx, int& pipeFd);
     void finalizeCgiResponse(CgiContext* ctx, int fd);
+    void registerCgiInputFd(CgiContext* ctx);
+    void syncCgiInputFdState(CgiContext* ctx);
+    void setClientEpollInterest(int fd, uint32_t events);
+    void updateCgiBackpressure(ClientState& client, CgiContext* ctx);
+    void syncClientEpollInterest(ClientState& client);
+    void streamClientBodyToCgi(ClientState& client, CgiContext* ctx, bool includeBodyFromHeaders,
+                               size_t bodyStart);
     void handleCgiEvent(int fd, uint32_t events);
     bool parseChunkedIncremental(ClientState& client);
-    void handleClientData(int fd);
-    void handleClientWrite(int fd);
+    void handleClientData(int fd, uint32_t events);
+    void handleClientWrite(int fd, uint32_t events);
     void closeConnection(int fd);
     HttpResponse routeRequest(const HttpRequest& req, const Config& server);
 };
