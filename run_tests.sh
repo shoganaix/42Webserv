@@ -78,6 +78,7 @@ on_interrupt() {
 on_exit() {
   if [ -f "$TEST_STATE_FILE" ]; then
     IFS='|' read -r CURRENT_TEST CURRENT_TEST_START_EPOCH < "$TEST_STATE_FILE" || true
+    CURRENT_TEST_ACTIVE=1
   fi
 
   close_current_test
