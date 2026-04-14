@@ -6,7 +6,7 @@
 /*   By: macastro <macastro@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/01/08 18:51:13 by angnavar          #+#    #+#             */
-/*   Updated: 2026/04/13 23:52:13 by macastro         ###   ########.fr       */
+/*   Updated: 2026/04/14 09:29:32 by macastro         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -765,13 +765,9 @@ void Webserv::handleCgiEvent(int fd, uint32_t events)
                     updateCgiBackpressure(client, ctx);
                 }
             }
-            else if (n < 0 && (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR))
+            else if (n < 0)
             {
-                // Non-blocking pipe temporarily unavailable; keep fd registered for next EPOLLOUT.
-            }
-            else
-            {
-                closeCgiPipe(ctx, ctx->inFd);
+                // Keep waiting for readiness changes; no error-specific branching here.
                 return;
             }
         }
@@ -799,14 +795,10 @@ void Webserv::handleCgiEvent(int fd, uint32_t events)
                                 to_string(ctx->rawResponse.size()));
             finalizeCgiResponse(ctx, fd);
         }
-        else if (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR)
+        else if (n < 0)
         {
-            // Non-blocking read would block/interrupted; wait for next readable event.
+            // Keep waiting for readiness changes; no error-specific branching here.
             return;
-        }
-        else
-        {
-            closeCgiPipe(ctx, ctx->outFd);
         }
     }
 }
@@ -831,12 +823,7 @@ void Webserv::handleClientData(int fd)
     ssize_t bytes = recv(fd, buffer, sizeof(buffer), 0);
 
     if (bytes < 0)
-    {
-        if (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR)
-            return;
-        this->closeConnection(fd);
         return;
-    }
     if (bytes == 0)
     {
         this->closeConnection(fd);
@@ -1465,13 +1452,7 @@ void Webserv::handleClientWrite(int fd)
         }
     }
     else if (sent < 0)
-    {
-        if (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR)
-            return;
-        std::cerr << RED << " [ERROR] Send failed on FD " << fd << RESET << std::endl;
-        this->closeConnection(fd);
         return;
-    }
 
     // FINALIZACIÓN:
     if (client.bytesSent >= client.writeBuffer.size())
