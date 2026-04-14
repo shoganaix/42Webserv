@@ -6,7 +6,7 @@
 /*   By: macastro <macastro@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/01/08 18:51:13 by angnavar          #+#    #+#             */
-/*   Updated: 2026/04/14 23:27:03 by macastro         ###   ########.fr       */
+/*   Updated: 2026/04/14 23:55:26 by macastro         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -657,12 +657,7 @@ void Webserv::finalizeCgiResponse(CgiContext* ctx, int fd)
     {
         this->clients[ctx->clientFd].writeBuffer = res.toString(false);
         this->clients[ctx->clientFd].bytesSent = 0;
-
-        struct epoll_event ev;
-        std::memset(&ev, 0, sizeof(ev));
-        ev.events = EPOLLOUT;
-        ev.data.fd = ctx->clientFd;
-        epoll_ctl(this->epollFd, EPOLL_CTL_MOD, ctx->clientFd, &ev);
+        setClientEpollInterest(ctx->clientFd, EPOLLOUT);
     }
 
     destroyCgiContext(ctx, false);
@@ -1173,11 +1168,7 @@ void Webserv::handleClientData(int fd, uint32_t events)
                 client.lastBodyLogCheckpoint = 0;
                 client.resetRequestCache();
 
-                epoll_event ev;
-                std::memset(&ev, 0, sizeof(ev));
-                ev.events = EPOLLOUT;
-                ev.data.fd = fd;
-                epoll_ctl(this->epollFd, EPOLL_CTL_MOD, fd, &ev);
+                setClientEpollInterest(fd, EPOLLOUT);
                 return;
             }
 
@@ -1228,11 +1219,7 @@ void Webserv::handleClientData(int fd, uint32_t events)
                         client.resetRequestCache();
 
                         // Switch epoll to write mode to send the response immediately
-                        epoll_event ev;
-                        std::memset(&ev, 0, sizeof(ev));
-                        ev.events = EPOLLOUT;
-                        ev.data.fd = fd;
-                        epoll_ctl(this->epollFd, EPOLL_CTL_MOD, fd, &ev);
+                        setClientEpollInterest(fd, EPOLLOUT);
 
                         return;
                     }
@@ -1321,11 +1308,7 @@ void Webserv::handleClientData(int fd, uint32_t events)
                             client.lastBodyLogCheckpoint = 0;
                             client.resetRequestCache();
 
-                            epoll_event ev;
-                            std::memset(&ev, 0, sizeof(ev));
-                            ev.events = EPOLLOUT;
-                            ev.data.fd = fd;
-                            epoll_ctl(this->epollFd, EPOLL_CTL_MOD, fd, &ev);
+                            setClientEpollInterest(fd, EPOLLOUT);
                             return;
                         }
                     }
@@ -1351,11 +1334,7 @@ void Webserv::handleClientData(int fd, uint32_t events)
                     client.lastBodyLogCheckpoint = 0;
                     client.resetRequestCache();
 
-                    epoll_event ev;
-                    std::memset(&ev, 0, sizeof(ev));
-                    ev.events = EPOLLOUT;
-                    ev.data.fd = fd;
-                    epoll_ctl(this->epollFd, EPOLL_CTL_MOD, fd, &ev);
+                    setClientEpollInterest(fd, EPOLLOUT);
                     return;
                 }
             }
@@ -1456,11 +1435,7 @@ void Webserv::handleClientData(int fd, uint32_t events)
             // -----------------------------------------
             client.writeBuffer = res.toString(client.request.getMethod() == "HEAD");
             client.bytesSent = 0;
-            epoll_event ev;
-            std::memset(&ev, 0, sizeof(ev));
-            ev.events = EPOLLOUT;
-            ev.data.fd = fd;
-            epoll_ctl(this->epollFd, EPOLL_CTL_MOD, fd, &ev);
+            setClientEpollInterest(fd, EPOLLOUT);
 
             client.readBuffer.clear();
             client.headersLogged = false;
@@ -1484,11 +1459,7 @@ void Webserv::handleClientData(int fd, uint32_t events)
         client.lastBodyLogCheckpoint = 0;
         client.resetRequestCache();
         // CAMBIO A MODO ESCRITURA (EPOLLOUT)
-        epoll_event ev;
-        std::memset(&ev, 0, sizeof(ev));
-        ev.events = EPOLLOUT;
-        ev.data.fd = fd;
-        epoll_ctl(this->epollFd, EPOLL_CTL_MOD, fd, &ev);
+        setClientEpollInterest(fd, EPOLLOUT);
     }
 }
 
@@ -1519,11 +1490,7 @@ void Webserv::handleClientWrite(int fd, uint32_t events)
         }
         client.bytesSent = 0;
         client.writeBuffer.clear();
-        struct epoll_event ev;
-        std::memset(&ev, 0, sizeof(ev));
-        ev.events = EPOLLIN;
-        ev.data.fd = fd;
-        epoll_ctl(this->epollFd, EPOLL_CTL_MOD, fd, &ev);
+        setClientEpollInterest(fd, EPOLLIN);
         return;
     }
 
