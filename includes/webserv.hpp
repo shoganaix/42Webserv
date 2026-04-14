@@ -6,7 +6,7 @@
 /*   By: macastro <macastro@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2025/12/10 20:21:23 by msoriano          #+#    #+#             */
-/*   Updated: 2026/04/14 21:27:32 by macastro         ###   ########.fr       */
+/*   Updated: 2026/04/14 23:27:03 by macastro         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -197,6 +197,7 @@ class Webserv
     void finalizeCgiResponse(CgiContext* ctx, int fd);
     void registerCgiInputFd(CgiContext* ctx);
     void syncCgiInputFdState(CgiContext* ctx);
+    void setClientEpollInterest(int fd, uint32_t events);
     void updateCgiBackpressure(ClientState& client, CgiContext* ctx);
     void syncClientEpollInterest(ClientState& client);
     void streamClientBodyToCgi(ClientState& client, CgiContext* ctx, bool includeBodyFromHeaders,

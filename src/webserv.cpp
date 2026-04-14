@@ -6,7 +6,7 @@
 /*   By: macastro <macastro@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/01/08 18:51:13 by angnavar          #+#    #+#             */
-/*   Updated: 2026/04/14 21:52:10 by macastro         ###   ########.fr       */
+/*   Updated: 2026/04/14 23:27:03 by macastro         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -795,6 +795,17 @@ void Webserv::updateCgiBackpressure(ClientState& client, CgiContext* ctx)
     }
 }
 
+void Webserv::setClientEpollInterest(int fd, uint32_t events)
+{
+    struct epoll_event ev;
+    std::memset(&ev, 0, sizeof(ev));
+    ev.events = events;
+    ev.data.fd = fd;
+
+    if (epoll_ctl(this->epollFd, EPOLL_CTL_MOD, fd, &ev) < 0 && errno == ENOENT)
+        epoll_ctl(this->epollFd, EPOLL_CTL_ADD, fd, &ev);
+}
+
 void Webserv::syncClientEpollInterest(ClientState& client)
 {
     if (this->clients.find(client.fd) == this->clients.end())
@@ -816,13 +827,7 @@ void Webserv::syncClientEpollInterest(ClientState& client)
         return;
     }
 
-    struct epoll_event ev;
-    std::memset(&ev, 0, sizeof(ev));
-    ev.events = events;
-    ev.data.fd = client.fd;
-
-    if (epoll_ctl(this->epollFd, EPOLL_CTL_MOD, client.fd, &ev) < 0 && errno == ENOENT)
-        epoll_ctl(this->epollFd, EPOLL_CTL_ADD, client.fd, &ev);
+    setClientEpollInterest(client.fd, events);
 }
 
 void Webserv::handleCgiEvent(int fd, uint32_t events)
@@ -992,13 +997,7 @@ void Webserv::handleClientData(int fd, uint32_t events)
             client.lastBodyLogCheckpoint = 0;
             client.resetRequestCache();
 
-            syncClientEpollInterest(client);
-
-            epoll_event ev;
-            std::memset(&ev, 0, sizeof(ev));
-            ev.events = EPOLLOUT;
-            ev.data.fd = fd;
-            epoll_ctl(this->epollFd, EPOLL_CTL_MOD, fd, &ev);
+            setClientEpollInterest(fd, EPOLLOUT);
             return;
         }
 
@@ -1302,13 +1301,7 @@ void Webserv::handleClientData(int fd, uint32_t events)
                                 client.lastBodyLogCheckpoint = 0;
                                 client.resetRequestCache();
 
-                                syncClientEpollInterest(client);
-
-                                epoll_event ev;
-                                std::memset(&ev, 0, sizeof(ev));
-                                ev.events = EPOLLOUT;
-                                ev.data.fd = fd;
-                                epoll_ctl(this->epollFd, EPOLL_CTL_MOD, fd, &ev);
+                                setClientEpollInterest(fd, EPOLLOUT);
                                 return;
                             }
 
