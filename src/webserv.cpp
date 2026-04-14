@@ -6,7 +6,7 @@
 /*   By: macastro <macastro@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/01/08 18:51:13 by angnavar          #+#    #+#             */
-/*   Updated: 2026/04/14 20:59:11 by macastro         ###   ########.fr       */
+/*   Updated: 2026/04/14 21:05:23 by macastro         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -721,11 +721,13 @@ void Webserv::streamClientBodyToCgi(ClientState& client, CgiContext* ctx,
 
         if (client.chunkDecodedBody.size() > client.cgiChunkForwarded)
         {
-            const size_t delta = client.chunkDecodedBody.size() - client.cgiChunkForwarded;
-            ctx->writeBuffer.append(client.chunkDecodedBody, client.cgiChunkForwarded, delta);
-            client.cgiChunkForwarded = client.chunkDecodedBody.size();
+            const size_t forwardedStart = client.cgiChunkForwarded;
+            const size_t delta = client.chunkDecodedBody.size() - forwardedStart;
+            ctx->writeBuffer.append(client.chunkDecodedBody, forwardedStart, delta);
             client.cgiReceivedBody += delta;
             registerCgiInputFd(ctx);
+            client.chunkDecodedBody.erase(0, forwardedStart + delta);
+            client.cgiChunkForwarded = 0;
         }
 
         if (chunkComplete)
