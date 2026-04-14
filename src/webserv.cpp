@@ -6,7 +6,7 @@
 /*   By: macastro <macastro@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/01/08 18:51:13 by angnavar          #+#    #+#             */
-/*   Updated: 2026/04/14 20:34:41 by macastro         ###   ########.fr       */
+/*   Updated: 2026/04/14 20:45:02 by macastro         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -837,7 +837,15 @@ void Webserv::handleCgiEvent(int fd, uint32_t events)
             }
             else if (n < 0)
             {
-                // Keep waiting for readiness changes; no error-specific branching here.
+                if ((events & (EPOLLERR | EPOLLHUP)) != 0)
+                {
+                    closeCgiPipe(ctx, ctx->inFd);
+                    if (this->clients.count(ctx->clientFd))
+                    {
+                        ClientState& client = this->clients[ctx->clientFd];
+                        updateCgiBackpressure(client, ctx);
+                    }
+                }
                 return;
             }
         }
