@@ -1,27 +1,20 @@
-<!-- -------------------------------------------------
-                    📌 HTML PAGES
-     ◉ index.html
-     - Main entrypoint of webserv
-     - Provides links to test routes and features:
-         • Static content
-         • Redirections
-         • CGI endpoints
--------------------------------------------------- -->
-
 <!DOCTYPE html>
 <html lang="es">
 <head>
   <meta charset="UTF-8">
   <title>webserv test page</title>
-
   <style>
     body {
       font-family: Arial, sans-serif;
       margin: 40px;
       background: #f7f7fb;
       color: #222;
+      line-height: 1.5;
     }
-    h1 { margin-bottom: 10px; }
+
+    h1 {
+      margin-bottom: 10px;
+    }
 
     .card {
       background: white;
@@ -36,53 +29,72 @@
       text-decoration: none;
     }
 
-    a:hover { text-decoration: underline; }
+    a:hover {
+      text-decoration: underline;
+    }
 
     code {
       background: #eee;
-      padding: 2px 6px;
+      padding: 4px 8px;
       border-radius: 6px;
+      display: inline-block;
+      margin-top: 6px;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    .note {
+      color: #666;
+      font-size: 0.95em;
     }
   </style>
 </head>
-
 <body>
-  <h1>webserv manual test page</h1>
-  <p>Esta página sirve para probar rutas, redirect, autoindex y CGI.</p>
+  <h1>webserv default.conf test page</h1>
+  <p>Esta página muestra pruebas útiles para <code>default.conf</code> sin enlazar a recursos vacíos.</p>
 
-  <!-- ================= STATIC ================= -->
   <div class="card">
-    <h2>Static</h2>
-    <p><a href="/">GET /</a></p>
-    <p><a href="/tours/">GET /tours/</a></p>
-    <p><a href="/this-does-not-exist">404 test</a></p>
+    <h2>Working link</h2>
+    <p><a href="/">Reload GET /</a></p>
+    <p class="note">Esta es la única ruta visual segura para hacer clic aquí.</p>
   </div>
 
-  <!-- ================= REDIRECT ================= -->
   <div class="card">
-    <h2>Redirect</h2>
-    <p><a href="/red">GET /red</a></p>
-  </div>
+    <h2>POST tests</h2>
+    <p>POST should be rejected on <code>/</code>:</p>
+    <code>curl -i -X POST http://localhost:8080/</code>
 
-  <!-- ================= CGI ================= -->
-  <div class="card">
-    <h2>CGI</h2>
-    <p><a href="/cgi-bin/time.py">GET /cgi-bin/time.py</a></p>
-    <p><a href="/cgi-bin/time.py?name=maria&project=webserv">GET CGI with query string</a></p>
-  </div>
-
-  <!-- ================= POST ================= -->
-  <div class="card">
-    <h2>POST ideas</h2>
-
-    <p>Test CGI POST:</p>
-    <code>curl -i -X POST http://localhost:8080/cgi-bin/time.py -d "hello=world"</code>
-
-    <br><br>
-
-    <p>Test body limit:</p>
+    <p>POST should be accepted on <code>/post_body</code>:</p>
     <code>curl -i -X POST http://localhost:8080/post_body -d "12345"</code>
+
+    <p>POST body over 100 bytes should return 413:</p>
+    <code>curl -i -X POST http://localhost:8080/post_body -d "$(python3 -c 'print("a"*101)')"</code>
   </div>
 
+  <div class="card">
+    <h2>CGI tests</h2>
+    <p>POST to a <code>.bla</code> file should execute CGI:</p>
+    <code>curl -i -X POST http://localhost:8080/directory/youpi.bla -d "hello=world"</code>
+
+    <p>Optional GET test for CGI-related behavior:</p>
+    <code>curl -i http://localhost:8080/directory/youpi.bla</code>
+  </div>
+
+  <div class="card">
+    <h2>Directory tests</h2>
+    <p>These routes are part of the official setup, but they may return empty bodies if the provided files are empty:</p>
+    <code>curl -i http://localhost:8080/directory/</code>
+    <br><br>
+    <code>curl -i http://localhost:8080/directory/nop/</code>
+  </div>
+
+  <div class="card">
+    <h2>Bad request tests</h2>
+    <p>Invalid method:</p>
+    <code>printf 'BREW / HTTP/1.1\r\nHost: localhost:8080\r\n\r\n' | nc localhost 8080</code>
+
+    <p>Malformed request:</p>
+    <code>printf 'GARBAGE\r\n\r\n' | nc localhost 8080</code>
+  </div>
 </body>
 </html>

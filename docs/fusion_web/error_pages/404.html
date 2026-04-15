@@ -1,18 +1,51 @@
-#-------------------------------------------------
-#              📌 HTML PAGES 📌
-# ◉ error_pages/404.html
-#   - Custom error page returned when not found
-#   - Used to verify error handling
-#-------------------------------------------------
+<!-- -------------------------------------------------
+     📌 HTML PAGES
+     ◉ error_pages/404.html
+     - Custom error page returned when not found
+     - Used to verify error handling
+-------------------------------------------------- -->
 
 <!DOCTYPE html>
-<html lang="es">
-<head>
+<html lang="es"
   <meta charset="UTF-8">
   <title>404</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 40px;
+      background: #f7f7fb;
+      color: #222;
+      line-height: 1.5;
+    }
+
+    h1 {
+      margin-bottom: 10px;
+    }
+
+    a {
+      color: #0056b3;
+      text-decoration: none;
+    }
+
+    a:hover {
+      text-decoration: underline;
+    }
+
+    code {
+      background: #eee;
+      padding: 2px 6px;
+      border-radius: 6px;
+      display: inline-block;
+      margin-top: 5px;
+    }
+
+    ul {
+      padding-left: 20px;
+    }
+  </style>
 </head>
 <body>
-  <h1>404 personalizada</h1>
+  <h1>404</h1>
   <p>La ruta solicitada no existe.</p>
   <p><a href="/">Volver al inicio</a></p>
 </body>
