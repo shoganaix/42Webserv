@@ -6,7 +6,7 @@
 /*   By: usuario <usuario@student.42.fr>            +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/03/02 18:05:15 by root              #+#    #+#             */
-/*   Updated: 2026/04/15 14:24:09 by usuario          ###   ########.fr       */
+/*   Updated: 2026/04/15 15:29:01 by usuario          ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -57,7 +57,13 @@ CgiTarget CgiHandler::detectCgi(const Location& loc, const std::string& fsPath)
     target.isCgi = true;
     target.extension = ext;
     target.handlerPath = it->second;
-    target.scriptPath = fsPath;
+
+     char real_path[4096];
+    if (realpath(fsPath.c_str(), real_path))
+        target.scriptPath = std::string(real_path);
+    else
+        target.scriptPath = fsPath;
+    
     target.workingDir = dirnameOf(fsPath);
     return (target);
 }
@@ -229,6 +235,11 @@ CgiResult CgiHandler::execute(const HttpRequest& req, const CgiTarget& target,
                       << std::endl;
             exit(1);
         }
+        // ------------------- DEBUG: ---------------------
+        std::cerr << "[CGI-DEBUG] handler=" << argv[0]
+          << " script=" << target.scriptPath
+          << " cwd=" << target.workingDir << std::endl;
+        // ------------------------------------------------     
         execve(argv[0], &argv[0], &envp[0]);
         _exit(127);
     }
@@ -301,19 +312,26 @@ HttpResponse CgiHandler::parseCgiOutput(const std::string& rawOutput)
 {
     HttpResponse response;
     size_t sep = rawOutput.find("\r\n\r\n");
+    size_t sepLen = 4;
+
     if (sep == std::string::npos)
+    {
         sep = rawOutput.find("\n\n");
+        sepLen = 2;
+    }
+
     if (sep == std::string::npos)
     {
         response.setStatusCode(200);
         response.addHeader("Content-Type", "text/plain");
         response.setBody(rawOutput);
         response.addHeader("Content-Length", to_string(rawOutput.size()));
-        return (response);
+        return response;
     }
 
     std::string headersPart = rawOutput.substr(0, sep);
-    std::string bodyPart = rawOutput.substr(sep + 4);
+    std::string bodyPart = rawOutput.substr(sep + sepLen);
+
     std::istringstream iss(headersPart);
     std::string line;
     int statusCode = 200;
@@ -333,13 +351,15 @@ HttpResponse CgiHandler::parseCgiOutput(const std::string& rawOutput)
         std::string key = line.substr(0, colon);
         std::string value = line.substr(colon + 1);
 
-        // Trim de espacios
+        // Trim spaces
         size_t first = value.find_first_not_of(" \t");
         if (std::string::npos != first)
         {
             size_t last = value.find_last_not_of(" \t");
             value = value.substr(first, (last - first + 1));
         }
+        else
+            value.clear();
 
         if (key == "Status")
         {
@@ -358,8 +378,7 @@ HttpResponse CgiHandler::parseCgiOutput(const std::string& rawOutput)
     response.setStatusCode(statusCode);
     response.setBody(bodyPart);
 
-    // 2. FORZAR CONTENT-LENGTH (Esto es lo que el tester mira con lupa)
-    // El tamaño debe ser exactamente el de bodyPart.size()
+    // FORCE CONTENT-LENGTH: size must be exactly bodyPart.size()
     response.addHeader("Content-Length", to_string(bodyPart.size()));
 
     if (!hasContentType)

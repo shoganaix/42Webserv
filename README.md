@@ -47,11 +47,8 @@ Content-Length: 1234
 <Message Body>
 ```
 
----
-
 ## Features
-- **Configuration** file **parsing** ✔️
-- **Multiple server** blocks / ports ✔️
+- **Multiple server** blocks / **ports** ✔️
 - Non-blocking sockets with **epoll** ✔️
 - **Route matching** ✔️
 - **Concurrent connections** ✔️
@@ -72,19 +69,18 @@ Content-Length: 1234
 - Chunked request bodies are decoded before being forwarded to CGI
 - The server closes connections after sending the response (no keep-alive)
 
----
+
 ### HTTP Methods
 Method        | Description
 ------------- | -------------
-GET ✔️        | Retrieve a specific resource or a collection of resources, should not affect the data/resource
+GET ✔️        | Retrieving specific resource or collection of rcs, shouldn't affect data/resource
 POST ✔️       | Perform resource-specific processing on the request content
-PUT ❌        | Replace an existing resource or create a new resource at a specific URL
 DELETE ✔️     | Remove the specified resource
+PUT ❌        | Replace an existing resource or create a new resource at a specific URL
 HEAD ❌       | Same as GET, but returns only headers without the body
 OPTIONS ❌    | Describe the communication options for the target resource
 PATCH ❌      | Apply partial modifications to a resource
 
----
 
 ## Usage
 
@@ -147,9 +143,29 @@ pre-commit run --all-files
 .
 ├── Makefile
 ├── README.md
-├── default.conf
-├── getonly.conf
-├── nocgi.conf
+├── Subject.pdf
+├── EvaluationSheet.pdf
+├── tester
+├── cgi_tester
+├── run_tests.sh
+├── my_tester.py
+├── my_manual_tester.docx
+├── Dockerfile
+├── docker-readme.md
+├── pre-commit-config.yaml
+├── .clang-format
+├── .gitignore
+├── build/
+│   └──  src/
+│        └──  *.o
+├── includes/
+│   └──  *.hpp
+├── src/
+│   └──  *.cpp
+├── configs/
+│   ├── default.conf
+│   ├── my_tester.conf
+│   └── nocgi.conf
 ├── docs/
 │   ├── fusion_web/
 │   │   ├── index.html
@@ -159,10 +175,12 @@ pre-commit run --all-files
 │   └── cgi-bin/
 │       └── time.py
 ├── uploads/
+├── YoupiBanane/
 └── src/...
 ```
 
 ## Grade
+This project was succesfully submitted with a score of 100/100
 
  <p align="center">
 <img width="194" alt="Captura" src="https://github.com/shoganaix/42PushSwap/assets/123943292/a706aec1-2095-45b3-b583-19fbcaf614c9">
