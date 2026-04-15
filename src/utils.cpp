@@ -6,7 +6,7 @@
 /*   By: usuario <usuario@student.42.fr>            +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/01/21 00:44:52 by usuario           #+#    #+#             */
-/*   Updated: 2026/03/19 19:11:36 by usuario          ###   ########.fr       */
+/*   Updated: 2026/04/15 14:40:48 by usuario          ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -21,6 +21,14 @@
  *      valid (>= 0)
  *  - vecToCharPtr(std::vector<std::string>& src): converts a vector of
  *      strings into a NULL-terminated array of char *
+ *  - getExtension(const std::string& path): extracts file extension
+ *      from path (including '.')
+ *  - isCgiRequest(const Location& loc, const std::string& fsPath):
+ *      checks whether a request should be handled as CGI
+ *       1. Extracts file extension
+ *       2. Looks up extension in location.cgi_needs map
+ *       3. Returns true if CGI handler exists
+ *  - toLower(std::string s): converts string to lowercase
  * -----------------------------------------------------------------------
  */
 
@@ -64,4 +72,11 @@ bool isCgiRequest(const Location& loc, const std::string& fsPath)
 
     std::map<std::string, std::string>::const_iterator it = loc.cgi_needs.find(ext);
     return (it != loc.cgi_needs.end());
+}
+
+std::string toLower(std::string s)
+{
+    for (size_t i = 0; i < s.length(); ++i)
+        s[i] = std::tolower(static_cast<unsigned char>(s[i]));
+    return s;
 }

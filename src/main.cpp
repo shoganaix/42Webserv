@@ -3,10 +3,10 @@
 /*                                                        :::      ::::::::   */
 /*   main.cpp                                           :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: macastro <macastro@student.42madrid.com    +#+  +:+       +#+        */
+/*   By: usuario <usuario@student.42.fr>            +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2025/12/10 20:21:26 by msoriano          #+#    #+#             */
-/*   Updated: 2026/04/11 14:21:20 by macastro         ###   ########.fr       */
+/*   Updated: 2026/04/15 14:19:52 by usuario          ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -38,8 +38,8 @@ void run_tests()
     testlocationMatches();
     testmatchLocation();
     // printAllConfigs(cfgs);
-    // // debugTestLocationMatching(cfgs);
-    // // debugTestPathResolution(cfgs);
+    // debugTestLocationMatching(cfgs);
+    // debugTestPathResolution(cfgs);
     // debugTestRoutingAndResolution(cfgs);
     // debugTestCgiDetection(cfgs);
     // debugTestCgiEnv(cfgs[0]);

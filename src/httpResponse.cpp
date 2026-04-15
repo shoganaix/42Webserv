@@ -3,16 +3,20 @@
 /*                                                        :::      ::::::::   */
 /*   httpResponse.cpp                                   :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: angnavar <angnavar@student.42madrid.com    +#+  +:+       +#+        */
+/*   By: usuario <usuario@student.42.fr>            +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/02/20 13:48:49 by kpineda-          #+#    #+#             */
-/*   Updated: 2026/04/06 10:51:58 by angnavar         ###   ########.fr       */
+/*   Updated: 2026/04/15 14:41:53 by usuario          ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
+
+/*  ....
+*/
 
 #include "httpResponse.hpp"
 #include "pathResolver.hpp"
 #include "colors.hpp"
+#include "utils.hpp"
 
 #include <iostream>
 #include <fstream>
@@ -22,18 +26,27 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
-// Static member definitions
+/* Static member definitions */
 std::map<int, std::string> HttpResponse::statusMessages;
 std::map<std::string, std::string> HttpResponse::mimeTypes;
 
+/* Initializes HTTP response with default values
+ * - Sets HTTP version to 1.1
+ * - Default status code = 200 OK
+ * - Initializes status messages and MIME types (only once)
+ */
 HttpResponse::HttpResponse() : _isCgi(false), version("HTTP/1.1"), statusCode(200), body("")
 {
     initializeStatusMessages();
     initializeMimeTypes();
 }
 
+/* Default destructor */
 HttpResponse::~HttpResponse() {}
 
+/* Initializes HTTP status code -> message map
+ * Ensures initialization happens only once (static storage)
+ */
 void HttpResponse::initializeStatusMessages()
 {
     if (!statusMessages.empty())
@@ -51,6 +64,9 @@ void HttpResponse::initializeStatusMessages()
     statusMessages[500] = "Internal Server Error";
 }
 
+/* Initializes file extension -> MIME type map
+ * Used to set correct Content-Type header when serving files
+ */
 void HttpResponse::initializeMimeTypes()
 {
     if (!mimeTypes.empty())
@@ -67,14 +83,17 @@ void HttpResponse::initializeMimeTypes()
 }
 
 void HttpResponse::setStatusCode(int code) { statusCode = code; }
-
 int HttpResponse::getStatusCode() const { return (statusCode); }
 
+/* Adds or overrides a header key-value pair */
 void HttpResponse::addHeader(const std::string& key, const std::string& value)
 {
     headers[key] = value;
 }
 
+/* Sets response body
+ * Automatically updates Content-Length header
+ */
 void HttpResponse::setBody(const std::string& body)
 {
     this->body = body;
@@ -84,6 +103,10 @@ void HttpResponse::setBody(const std::string& body)
     addHeader("Content-Length", ss.str());
 }
 
+/* Resets response to default state
+ * - Clears headers and body
+ * - Resets status code and version
+ */
 void HttpResponse::clear()
 {
     version = "HTTP/1.1";
@@ -92,13 +115,14 @@ void HttpResponse::clear()
     headers.clear();
 }
 
-std::string HttpResponse::toLower(std::string s)
-{
-    for (size_t i = 0; i < s.length(); ++i)
-        s[i] = std::tolower(static_cast<unsigned char>(s[i]));
-    return s;
-}
-
+/* Generates HTML directory listing (autoindex)
+ * 1. Opens directory
+ * 2. Iterates over entries (files & folders)
+ * 3. Skips hidden files (except "..")
+ * 4. Builds HTML list with links
+ * 5. Adds '/' suffix for directories
+ * 6. Returns complete HTML page
+ */
 std::string HttpResponse::generateAutoIndex(const std::string& path)
 {
     DIR* dir;
@@ -134,6 +158,19 @@ std::string HttpResponse::generateAutoIndex(const std::string& path)
     return html.str();
 }
 
+/* Loads file from filesystem and prepares HTTP response
+ * 1. Checks if file exists (stat)
+ *      - If not -> 404 Not Found
+ * 2. Checks if it's a regular file
+ *      - If not -> 403 Forbidden
+ * 3. Opens file in binary mode
+ * 4. Reads entire content into response body
+ * 5. Extracts file extension
+ * 6. Sets appropriate Content-Type using MIME map
+ *      - Defaults to application/octet-stream if unknown
+ * 7. Sets status code 200 on success
+ * 8. Handles permission errors (403)
+ */
 void HttpResponse::loadFile(const std::string& path)
 {
     struct stat path_stat;
@@ -155,22 +192,6 @@ void HttpResponse::loadFile(const std::string& path)
         addHeader("Content-Type", "text/html");
         return;
     }
-    // NO NEED IF WE USE PATH RESOLVER
-    //  Is it a directory?
-    /*
-    if (S_ISDIR(path_stat.st_mode))
-    {
-        std::string index = path + "/index.html";
-        struct stat index_stat;
-        if (stat(index.c_str(), &index_stat) == 0 && S_ISREG(index_stat.st_mode))
-            return loadFile(index);
-        setStatusCode(200);
-        setBody(generateAutoIndex(path));
-        addHeader("Content-Type", "text/html");
-        return;
-    }
-    */
-    // It's a regular file, try to read it
     std::ifstream file(path.c_str(), std::ios::in | std::ios::binary);
     if (file.is_open())
     {
@@ -207,32 +228,18 @@ void HttpResponse::loadFile(const std::string& path)
     }
 }
 
+/* Handles HTTP GET request
+ * 1. Checks if resolved path exists
+ *      - If not -> 404
+ * 2. If path is a directory:
+ *      a) Try to serve index file (loc.index)
+ *      b) If no index and autoindex ON -> generate directory listing
+ *      c) Otherwise -> 404
+ * 3. If path is a file:
+ *      - Calls loadFile()
+ */
 void HttpResponse::handleGet(const std::string& resolved, const Location& loc)
 {
-    //-----MOVED TO ROUTE
-    /*
-    bool allowed = false;
-    for (size_t i = 0; i < loc.allow_methods.size(); ++i)
-    {
-        if (loc.allow_methods[i] == "GET")
-        {
-            allowed = true;
-            break;
-        }
-    }
-
-    if (!allowed)
-    {
-        setStatusCode(405);
-        setBody("<html><body><h1>405 Method Not Allowed</h1><p>GET method is not allowed for this
-    resource.</p></body></html>"); addHeader("Content-Type", "text/html"); return;
-    }
-    */
-
-    //----- Assumes rout is always loc.rooth + url
-    // std::string fullPath = loc.root + url;
-    // loadFile(fullPath);
-    //----- Uses resolvedPath
     struct stat s;
     if (stat(resolved.c_str(), &s) != 0)
     {
@@ -244,7 +251,7 @@ void HttpResponse::handleGet(const std::string& resolved, const Location& loc)
 
     if (S_ISDIR(s.st_mode))
     {
-        // 1) intentar index dentro del directorio
+        // Try index inside directory
         if (!loc.index.empty())
         {
             std::string indexPath = resolved;
@@ -259,7 +266,7 @@ void HttpResponse::handleGet(const std::string& resolved, const Location& loc)
                 return;
             }
         }
-        // 2) si no hay index y autoindex está activado
+        // If no index AND autoindex ON
         if (loc.autoindex)
         {
             setStatusCode(200);
@@ -267,7 +274,7 @@ void HttpResponse::handleGet(const std::string& resolved, const Location& loc)
             addHeader("Content-Type", "text/html");
             return;
         }
-        // 3) si no hay index ni autoindex
+        // If no index nor autoindex
         setStatusCode(404);
         setBody("<html><body><h1>404 Not Found</h1></body></html>");
         addHeader("Content-Type", "text/html");
@@ -277,41 +284,17 @@ void HttpResponse::handleGet(const std::string& resolved, const Location& loc)
     loadFile(resolved);
 }
 
+/* Handles HTTP DELETE request
+ * 1. Checks if file exists
+ *      - If not -> 404
+ * 2. If target is a directory -> 403 (forbidden)
+ * 3. Attempts to delete file using unlink()
+ *      - Success -> 200 OK
+ *      - Failure -> 500 Internal Server Error
+ */
 void HttpResponse::handleDelete(const std::string& resolved, const Location& loc)
 {
     (void)loc; // Avoid unused parameter warning
-    //-----MOVED TO ROUTE
-    /*
-    bool allowed = false;
-    for (size_t i = 0; i < loc.allow_methods.size(); ++i)
-    {
-        if (loc.allow_methods[i] == "DELETE")
-        {
-            allowed = true;
-            break;
-        }
-    }
-
-    if (!allowed)
-    {
-        setStatusCode(405);
-        setBody("<html><body><h1>405 Method Not Allowed</h1><p>DELETE method is not allowed for this
-    resource.</p></body></html>"); addHeader("Content-Type", "text/html"); return;
-    }
-    */
-
-    /*----- Lorena's old Path resolver
-    std::string root = loc.root;
-    std::string path = url;
-
-    if (!root.empty() && root[root.length() - 1] == '/' && !path.empty() && path[0] == '/')
-        path = path.substr(1);
-    else if (!root.empty() && root[root.length() - 1] != '/' && !path.empty() && path[0] != '/')
-        root += "/";
-
-    std::string fullPath = root + path;
-    */
-
     //----- Uses resolvedPath
     std::string fullPath = resolved;
     //------
@@ -348,6 +331,12 @@ void HttpResponse::handleDelete(const std::string& resolved, const Location& loc
     }
 }
 
+/* Saves POST body into file
+ * 1. Builds full file path (uploadPath + filename)
+ * 2. Opens file in binary write mode
+ * 3. Writes body content
+ * 4. Returns true on success, false otherwise
+ */
 bool HttpResponse::savePostFile(const std::string& uploadPath, const std::string& body,
                                 const std::string& filename)
 {
@@ -362,53 +351,15 @@ bool HttpResponse::savePostFile(const std::string& uploadPath, const std::string
     }
     return false;
 }
-/*
-void HttpResponse::handlePost(const std::string &body, const Location &loc)
-{
-    //-----MOVED TO ROUTE
-    //
-    bool allowed = false;
-    for (size_t i = 0; i < loc.allow_methods.size(); ++i)
-    {
-        if (loc.allow_methods[i] == "POST")
-        {
-            allowed = true;
-            break;
-        }
-    }
-    if (!allowed)
-    {
-        setStatusCode(405);
-        setBody("<html><body><h1>405 Method Not Allowed</h1><p>POST method is not allowed for this
-resource.</p></body></html>"); addHeader("Content-Type", "text/html"); return;
-    }
-    if (body.length() > maxSize)
-    {
-        setStatusCode(413);
-        setBody("<html><body><h1>413 Payload Too Large</h1><p>The uploaded data exceeds the maximum
-allowed size.</p></body></html>"); addHeader("Content-Type", "text/html"); return;
-    }
-    //
-    std::stringstream fileName;
-    fileName << "upload_" << time(0) << ".txt";
 
-    std::string path = loc.upload_path.empty() ? "." : loc.upload_path;
-
-    if (savePostFile(path, body, fileName.str()))
-    {
-        setStatusCode(201);
-        setBody("<html><body><h1>201 Created</h1><p>File uploaded successfully.</p></body></html>");
-        addHeader("Content-Type", "text/html");
-    }
-    else
-    {
-        setStatusCode(500);
-        setBody("<html><body><h1>500 Internal Server Error</h1><p>Failed to save the uploaded
-file.</p></body></html>"); addHeader("Content-Type", "text/html");
-    }
-}
-*/
-
+/* Handles HTTP POST request (file write)
+ * 1. Checks if file already exists
+ * 2. Opens/creates file at resolved path
+ * 3. Writes request body into file
+ * 4. If write fails -> 500 error
+ * 5. If file existed before -> 200 OK
+ *    Otherwise            -> 201 Created
+ */
 void HttpResponse::handlePost(const std::string& resolved, const std::string& body,
                               const Location& loc)
 {
@@ -443,6 +394,12 @@ void HttpResponse::handlePost(const std::string& resolved, const std::string& bo
     addHeader("Content-Type", "text/html");
 }
 
+/* Sets HTTP redirection response
+ * 1. Clears current response
+ * 2. Sets status code (301, 302, etc.)
+ * 3. Adds "Location" header
+ * 4. Generates simple HTML body with redirect link
+ */
 void HttpResponse::setRedirect(const std::string& location, int code)
 {
     clear();
@@ -453,7 +410,13 @@ void HttpResponse::setRedirect(const std::string& location, int code)
     addHeader("Content-Type", "text/html");
 }
 
-// std::string HttpResponse::toString() const
+/* Builds full HTTP response string
+ * 1. Writes status line (version + code + message)
+ * 2. Appends all headers
+ * 3. Adds "Connection: close"
+ * 4. Adds empty line (header/body separator)
+ * 5. Appends body unless omitBody = true (used for HEAD)
+ */
 std::string HttpResponse::toString(bool omitBody) const
 {
     std::stringstream response;
@@ -470,7 +433,6 @@ std::string HttpResponse::toString(bool omitBody) const
         response << it->first << ": " << it->second << "\r\n";
     response << "Connection: close\r\n";
     response << "\r\n";
-    // so HEAD works
     if (!omitBody)
         response << body;
 

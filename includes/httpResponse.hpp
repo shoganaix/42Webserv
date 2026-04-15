@@ -3,10 +3,10 @@
 /*                                                        :::      ::::::::   */
 /*   httpResponse.hpp                                   :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: angnavar <angnavar@student.42madrid.com    +#+  +:+       +#+        */
+/*   By: usuario <usuario@student.42.fr>            +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/02/20 13:48:43 by kpineda-          #+#    #+#             */
-/*   Updated: 2026/04/06 10:49:36 by angnavar         ###   ########.fr       */
+/*   Updated: 2026/04/15 14:42:06 by usuario          ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -62,8 +62,6 @@ class HttpResponse
     // Static initialization methods
     static void initializeMimeTypes();      // Initialize the MIME type mapping
     static void initializeStatusMessages(); // Initialize the status code to message mapping
-
-    std::string toLower(std::string s);
 
   public:
     HttpResponse();

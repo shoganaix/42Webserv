@@ -3,19 +3,12 @@
 /*                                                        :::      ::::::::   */
 /*   debug.cpp                                          :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: macastro <macastro@student.42madrid.com    +#+  +:+       +#+        */
+/*   By: usuario <usuario@student.42.fr>            +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/02/11 20:53:33 by usuario           #+#    #+#             */
-/*   Updated: 2026/04/09 20:53:19 by macastro         ###   ########.fr       */
+/*   Updated: 2026/04/15 14:21:58 by usuario          ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
-
-#include "../includes/debug.hpp"
-#include "../includes/matchLocation.hpp"
-#include "../includes/pathResolver.hpp"
-#include "../includes/webserv.hpp"
-#include "../includes/cgiHandler.hpp"
-#include "../includes/httpRequest.hpp"
 
 /*-----------------------------------------------------------------------
  *                      🖨️DEBUG: CONFIG PARSER🖨️
@@ -32,6 +25,13 @@
  * correctly before starting the server runtime
  * -----------------------------------------------------------------------
  */
+
+#include "../includes/debug.hpp"
+#include "../includes/matchLocation.hpp"
+#include "../includes/pathResolver.hpp"
+#include "../includes/webserv.hpp"
+#include "../includes/cgiHandler.hpp"
+#include "../includes/httpRequest.hpp"
 
 // ---------------------------- MULTI-SERVER CONF PARSER ------------------------
 static void printLocation(const Location& loc)

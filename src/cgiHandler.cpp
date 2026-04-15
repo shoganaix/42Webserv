@@ -3,16 +3,12 @@
 /*                                                        :::      ::::::::   */
 /*   cgiHandler.cpp                                     :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: macastro <macastro@student.42madrid.com    +#+  +:+       +#+        */
+/*   By: usuario <usuario@student.42.fr>            +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/03/02 18:05:15 by root              #+#    #+#             */
-/*   Updated: 2026/04/11 15:03:35 by macastro         ###   ########.fr       */
+/*   Updated: 2026/04/15 14:24:09 by usuario          ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
-
-#include "../includes/cgiHandler.hpp"
-#include "../includes/utils.hpp"
-#include "../includes/logger.hpp"
 
 /*-----------------------------------------------------------------------
  *                          🧩CGI HANDLER🧩
@@ -31,8 +27,12 @@
  * into a valid HTTP response that can be returned by the server
  *-----------------------------------------------------------------------
  */
-//---------------------------------------DETECTING-------------------------------------------
 
+#include "../includes/cgiHandler.hpp"
+#include "../includes/utils.hpp"
+#include "../includes/logger.hpp"
+
+//---------------------------------------DETECTING-------------------------------------------
 /*
  * Checks whether the requested filesystem path matches configured CGI extension
  * If a match is found:

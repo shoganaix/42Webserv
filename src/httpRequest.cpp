@@ -3,12 +3,26 @@
 /*                                                        :::      ::::::::   */
 /*   httpRequest.cpp                                    :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: macastro <macastro@student.42madrid.com    +#+  +:+       +#+        */
+/*   By: usuario <usuario@student.42.fr>            +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/03/03 21:07:34 by root              #+#    #+#             */
-/*   Updated: 2026/04/12 17:44:49 by macastro         ###   ########.fr       */
+/*   Updated: 2026/04/15 14:30:30 by usuario          ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
+
+/*-----------------------------------------------------------------------
+ *                        🌐 HTTP REQUEST 🌐
+ *
+ * This file handles parsing of raw HTTP requests received from clients
+ * 
+ * It is responsible for extracting and validating request components
+ *      - Request line (method, path, query, HTTP version)
+ *      - Headers (normalized and stored in a map)
+ *      - Message body (Content-Length or chunked encoding)
+ *
+ * This verification guarantees that only well-formed HTTP requests
+ * are passed to the server routing and response generation layers
+ *-----------------------------------------------------------------------*/
 
 #include "../includes/httpRequest.hpp"
 #include <iostream>

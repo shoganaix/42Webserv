@@ -3,77 +3,28 @@
 /*                                                        :::      ::::::::   */
 /*   webserv.cpp                                        :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: macastro <macastro@student.42madrid.com    +#+  +:+       +#+        */
+/*   By: usuario <usuario@student.42.fr>            +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/01/08 18:51:13 by angnavar          #+#    #+#             */
-/*   Updated: 2026/04/15 00:43:38 by macastro         ###   ########.fr       */
+/*   Updated: 2026/04/15 15:08:34 by usuario          ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
-
-/* DELETE LATER:
- * ----------------------------TO DO:---------------------------------
- * HTTP parsing	    ✔
- * BASIC routing	✔
- * Static files	    ✔
- * Autoindex	    ✔
- * 	-> Si la URI apunta a un directorio y no hay index,
- *      entonces el servidor puede generar una página HTML
- *      con el listado de archivos del directorio
- * Chunked	       ✔
- *  ->  Codifies body request HTTP
- * CGI in route    ✔
- *
- * Error pages	   ❌
- * - HTML hardcodeado para 404, 403, 405, 413, 500 ...
- * - Eso cubre la parte “default” de forma básica pero no demuestra que esté leyendo y sirviendo
- páginas de error desde la config.
- *
- * Upload	       ❌
- * - El subject pide que los clientes puedan subir archivos y que en config puedas autorizar subida
- y definir storage location
- * - En handlePost() se guarda el body tal cual en upload_<timestamp>.txt dentro de upload_path o
- "."
- * - PERO
- *    -> no se valida bien si la ruta de upload existe
- *    -> no se gestiona multipart/form-data
- *    -> no se recupera el nombre real del fichero
- *    -> no se distingue entre POST “normal” y una subida real
- *    -> no se garantiza luego “upload some file to the server and get it back” como pide la
- evaluation sheet
- *
- * Non blocking IO ❌
- * - Usar un solo poll() o equivalente para lectura y escritura
- * - Está prohibido ajustar el comportamiento mirando errno después de read o write.
- * - Si revisan errno tras read/recv/write/send, la evaluación es un 0 (revisar handleClientData() y
- handleClientWrite())
- *
- * Default file for directories ✔
- * - El subject dice que en config debes poder definir el fichero por defecto cuando el recurso
- pedido es un directorio.
- * - En handleGet() si el target es directorio:
- *   autoindex está on, generas listing, si no, se devuelves 404
- *   PERO NO si ya hay autoindex, mostrar index por directorio (DONE)
- *
- * 2026 abril
- * Qué priorizar ahora:
- * - Primero pasar el tester: comportamiento correcto según config, sin regressions.
- * - Luego bajar ruido de logs grandes en webserv.cpp.
- * - Después optimizar rendimiento de body chunked para no reparsear todo el buffer en cada paquete,
- moviendo a parse incremental en httpRequest.cpp.
- */
 
 /*-----------------------------------------------------------------------
  *                          🧠WEBSERV BRAIN🧠
  *
- * This class represents the main Webserver engine
- *
+ * This class represents the main Webserver engine using epoll
+ * 
  * Responsibilities:
  *  - Load and store parsed configuration
  *  - Initialize listening sockets for each server
  *  - Manage the main event loop (epoll)
  *  - Handle client connections
  * 	- Handle client requests
- *  - Generate a response
+ *  - Call to read and parse HTTP requests
+ *  - Route requests to the appropriate handler (static files / CGI)
+ *  - Execute CGI scripts asynchronously using pipes and call handler
+ *  - Send response back to client
  *
  * The run() method starts the infinite event loop
  * where the server waits for incoming connections
@@ -91,6 +42,9 @@
 #include "cgiHandler.hpp"
 #include "pathResolver.hpp"
 
+/* Returns number of pending bytes to be written to CGI stdin
+ * (writeBuffer - writeOffset)
+ */
 static size_t getCgiPendingBytes(const CgiContext* ctx)
 {
     if (!ctx)
@@ -100,6 +54,14 @@ static size_t getCgiPendingBytes(const CgiContext* ctx)
     return ctx->writeBuffer.size() - ctx->writeOffset;
 }
 
+/* Incrementally parses chunked transfer encoding:
+ *  - Reads chunk size (hex)
+ *  - Extracts chunk data
+ *  - Validates CRLF separators
+ *  - Stops when final chunk (size 0) is reached
+ *
+ * Allows processing large bodies without buffering entire request.
+ */
 bool Webserv::parseChunkedIncremental(ClientState& client)
 {
     if (!client.requestIsChunked)
@@ -179,6 +141,13 @@ bool Webserv::parseChunkedIncremental(ClientState& client)
     }
 }
 
+/* Destroys a CGI execution context
+ * - Detaches context from client if still linked
+ * - Closes input/output pipes
+ * - Optionally kills CGI process (SIGKILL)
+ * - Reaps process using waitpid (non-blocking)
+ * - Frees memory
+ */
 void Webserv::destroyCgiContext(CgiContext* ctx, bool killProcess)
 {
     if (!ctx)
@@ -203,6 +172,10 @@ void Webserv::destroyCgiContext(CgiContext* ctx, bool killProcess)
     delete ctx;
 }
 
+/* Detaches CGI context from client state
+ * - Resets streaming-related flags
+ * - Updates epoll interest accordingly
+ */
 void Webserv::detachCgiContext(ClientState& client)
 {
     if (!client.cgiCtx)
@@ -212,6 +185,12 @@ void Webserv::detachCgiContext(ClientState& client)
     syncClientEpollInterest(client);
 }
 
+/* Closes one CGI pipe (inFd or outFd)
+ * - Removes FD from epoll
+ * - Removes FD from internal CGI map
+ * - Closes file descriptor
+ * - Updates context state
+ */
 void Webserv::closeCgiPipe(CgiContext* ctx, int& pipeFd)
 {
     if (!ctx || pipeFd == -1)
@@ -242,37 +221,17 @@ Webserv::Webserv(const std::string& configFile)
     ConfigParser parser;
     this->config = parser.parse(configFile);
 
-    // -------------- DEBUG: ------------------
-    // Print parsed configuration to verify correct parsing and normalization
-    for (size_t i = 0; i < this->config.size(); ++i)
-    {
-        std::cerr << "[CONFIG] server " << i << " port=" << this->config[i].port
-                  << " root=" << this->config[i].root << std::endl;
-
-        for (size_t j = 0; j < this->config[i].locations.size(); ++j)
-        {
-            const Location& loc = this->config[i].locations[j];
-            std::cerr << "[CONFIG]   location=" << loc.path
-                      << " max_body=" << loc.client_max_body_size << std::endl;
-        }
-    }
-    // ----------------------------------------
-
     // 2) Normalize + validate configuration
     validateAllServers(this->config);
 }
 
 /*
  * Creates and initializes the listening sockets defined in config
- * -📌DONE:📌
  * - Creates listening sockets based on server blocks
  * - Configures socket OPTIONS (SO_REUSEADDR, non-blocking mode, ...) and PORT
  * - Adds listening sockets to poll()
  * - Stores mapping between fd and server configuration
- *
- * 📌TO DO:📌
- * - Support multiple servers with same port [OPTIONAL]
- */
+ * */
 void Webserv::setSockets()
 {
     // for each Config in this->config:
@@ -374,7 +333,7 @@ void Webserv::acceptNewConnection(int listeningFd)
         std::cerr << "Error in accept: " << strerror(errno) << std::endl;
         return;
     }
-    fcntl(clientFd, F_SETFL, O_NONBLOCK); // Set non-blocking mode
+    fcntl(clientFd, F_SETFL, O_NONBLOCK);
 
     ClientState newClient;
     newClient.fd = clientFd;
@@ -417,36 +376,7 @@ void Webserv::acceptNewConnection(int listeningFd)
  *      	a) computes relative path inside matched location
  *      	b) dispatches request to method handler
  *  7. Returns a fully built HttpResponse object
- *   📌TO DO:📌
- *      - ...
- * ------------------------------ STRUCTURE ---------------------------
- *
- * 	socket accepted
- *      ↓
- * 	read raw HTTP data
- *      ↓
- * 	HTTP parser
- *      ↓
- * 	HTTP Request
- *		↓
- * 	Router / file resolution
- *		↓
- * 	detectCgi()
- *		↓
- * 	CgiTarget (describes how a resource should be executed as CGI)
- *		↓
- * 	execute CGI
- *		↓
- * 	CgiResult (saves CGI execution result & exit status)
- *		↓
- * 	parseCgiOutput()
- *		↓
- *	HttpResponse
- *		↓
- *	serialize response
- *	    ↓
- *	send to client
- *
+
  */
 HttpResponse Webserv::routeRequest(const HttpRequest& req, const Config& server)
 {
@@ -461,7 +391,7 @@ HttpResponse Webserv::routeRequest(const HttpRequest& req, const Config& server)
     // ----------------------------------------
     // 1. Match location algorythm
     const Location* loc = matchLocation(server, req.getPath());
-    // STEPS 2, 3 & 4: MOVED FROM HTTPRESPONSE
+    // Steps 2, 3 & 4 moved from previous HttpResponse:
     //   - Why? HttpResponse shouldnt be the one deciding if reqeust can or cannotr execute but only
     //   handle reponse after core decides
 
@@ -477,7 +407,7 @@ HttpResponse Webserv::routeRequest(const HttpRequest& req, const Config& server)
         res.addHeader("Content-Type", "text/html");
         return (res);
     }
-    // -------------- DEBUG: ------------------
+    // ----------------------------------- DEBUG: ---------------------------------------
     else
     {
         if (DEBUG)
@@ -488,7 +418,7 @@ HttpResponse Webserv::routeRequest(const HttpRequest& req, const Config& server)
             logDebug(GREEN, matchedMsg);
         }
     }
-    // ----------------------------------------
+    // ----------------------------------------------------------------------------------
     if (!loc->redir.empty())
     {
         res.setRedirect(loc->redir, 302);
@@ -497,6 +427,7 @@ HttpResponse Webserv::routeRequest(const HttpRequest& req, const Config& server)
     // 4. Check allowed client_max_body_size
     if (loc->client_max_body_size > 0 && req.getBody().length() > loc->client_max_body_size)
     {
+        // ----------------------------------- DEBUG: ---------------------------------------
         if (DEBUG)
         {
             std::string bodyLimitMsg = "[ROUTE] body size exceeds client_max_body_size limit=" +
@@ -504,6 +435,7 @@ HttpResponse Webserv::routeRequest(const HttpRequest& req, const Config& server)
                                        " actual=" + to_string(req.getBody().length());
             logDebug(RED, bodyLimitMsg);
         }
+        // ----------------------------------------------------------------------------------
         res.setStatusCode(413);
         res.setBody("<html><body><h1>413 Payload Too Large</h1></body></html>");
         res.addHeader("Content-Type", "text/html");
@@ -512,12 +444,14 @@ HttpResponse Webserv::routeRequest(const HttpRequest& req, const Config& server)
 
     // 5. Resolve real path (FILESYSTEM)
     ResolvedPath resolved = resolvePath(*loc, req.getPath());
+    // ----------------------------------- DEBUG: --------------------------------
     if (DEBUG)
     {
         std::string resolvedMsg = "[ROUTE] resolved path=" + resolved.fsPath;
         logDebug(BLUE, resolvedMsg);
     }
-
+    // ----------------------------------------------------------------------------
+    
     // 6. Check allowed methods.
     // CGI gets priority so POST to .bla works even if the location is GET-only.
     CgiTarget target;
@@ -565,9 +499,9 @@ HttpResponse Webserv::routeRequest(const HttpRequest& req, const Config& server)
             CgiResult result =
                 _cgiHandler->execute(req, target, server.server_name, server.port, "127.0.0.1");
 
-            // Creamos el contexto para que handleCgiEvent sepa qué hacer
             CgiContext* ctx = new CgiContext();
-            ctx->clientFd = req.getClientFd(); // Asegúrate de haberlo seteado antes
+            
+            ctx->clientFd = req.getClientFd();
             ctx->writeBuffer = req.getBody();
             ctx->bytesWritten = 0;
             ctx->inputFinished = true;
@@ -579,22 +513,20 @@ HttpResponse Webserv::routeRequest(const HttpRequest& req, const Config& server)
                          to_string(ctx->clientFd) + " CGI PID: " + to_string(ctx->pid));
             logDebug(GREEN, "[ROUTE] 2 CGI inFd: " + to_string(ctx->inFd) +
                                 " outFd: " + to_string(ctx->outFd));
-            // Mapeamos ambos FDs al mismo contexto
             this->_cgiFds[result.inFd] = ctx;
             this->_cgiFds[result.outFd] = ctx;
 
             if (ctx->writeBuffer.empty())
             {
-                // CLAVE: no body -> epoll delete inFd and Close pipe
-                // -> Esto es porque el CGI espera un EOF para empezar a ejecutar
-                // y si no hay body, el pipe se queda esperando a que le escriban algo que nunca
-                // llega. Al cerrar el pipe, el CGI recibe un EOF y empieza a ejecutarse
-                // directamente. Esto envía un EOF al binario CGI y lo desbloquea.
+                /* If no body is present:
+                * Close input pipe to send EOF to CGI process.
+                * This prevents the CGI from blocking waiting for input.
+                */
                 closeCgiPipe(ctx, ctx->inFd);
             }
             else
             {
-                // Si hay body (POST 100MB), registramos pipe de entrada para escribir
+                /* Register input pipe for writing (POST body streaming) */
                 struct epoll_event evIn;
                 std::memset(&evIn, 0, sizeof(evIn));
                 evIn.events = EPOLLOUT;
@@ -603,15 +535,15 @@ HttpResponse Webserv::routeRequest(const HttpRequest& req, const Config& server)
                 ctx->inputRegistered = true;
             }
 
-            // Registramos pipe de salida para leer la respuesta del CGI
+            /* Register output pipe to read CGI response */
             struct epoll_event ev;
             std::memset(&ev, 0, sizeof(ev));
 
-            ev.events = EPOLLIN; // Para leer la respuesta del CGI
+            ev.events = EPOLLIN; // Read CGI response
             ev.data.fd = result.outFd;
             epoll_ctl(this->epollFd, EPOLL_CTL_ADD, result.outFd, &ev);
 
-            // MARCAMOS LA RESPUESTA COMO CGI
+            /* Mark response as CGI-driven */
             res.setIsCgi(true);
             return (res);
         }
@@ -627,8 +559,6 @@ HttpResponse Webserv::routeRequest(const HttpRequest& req, const Config& server)
     //   - Why? We want to keep the logic of “how to handle a GET/POST/DELETE request” inside
     //   HttpResponse but the logic of “what is the real path of the resource we are trying to
     //   access” should be outside of it and be decided by the core router
-
-    // COMPROBAR POR QUE HACE SUBSTR !! *
     std::string relativePath = resolved.fsPath;
     if (relativePath.empty())
         relativePath = "/";
@@ -649,6 +579,13 @@ HttpResponse Webserv::routeRequest(const HttpRequest& req, const Config& server)
     return (res);
 }
 
+/* Finalizes CGI response and sends it to client
+ * - Parses raw CGI output into HttpResponse
+ * - Ensures valid HTTP status code
+ * - Stores response in client write buffer
+ * - Switches client to EPOLLOUT
+ * - Cleans up CGI context (without killing process)
+ */
 void Webserv::finalizeCgiResponse(CgiContext* ctx, int fd)
 {
     (void)fd;
@@ -666,6 +603,12 @@ void Webserv::finalizeCgiResponse(CgiContext* ctx, int fd)
     destroyCgiContext(ctx, false);
 }
 
+/* Registers CGI stdin (inFd) in epoll for writing
+ * Only if:
+ *  - Context is valid
+ *  - There is pending data to write
+ *  - FD is not already registered
+ */
 void Webserv::registerCgiInputFd(CgiContext* ctx)
 {
     if (!ctx || ctx->inFd == -1 || ctx->inputRegistered)
@@ -686,6 +629,11 @@ void Webserv::registerCgiInputFd(CgiContext* ctx)
     }
 }
 
+/* Synchronizes CGI input pipe state with current buffer
+ * - Closes pipe if all data sent and input finished
+ * - Removes FD from epoll if no data pending
+ * - Registers FD if new data needs to be written
+ */
 void Webserv::syncCgiInputFdState(CgiContext* ctx)
 {
     if (!ctx || ctx->inFd == -1)
@@ -707,6 +655,25 @@ void Webserv::syncCgiInputFdState(CgiContext* ctx)
     }
 }
 
+/* Streams client request body to CGI process
+ *
+ * Supports:
+ *  - Chunked transfer encoding
+ *  - Content-Length bodies
+ *
+ * Chunked mode:
+ *  1. Parses chunks incrementally
+ *  2. Appends decoded data to CGI write buffer
+ *  3. Cleans processed buffer to avoid growth
+ *
+ * Normal mode:
+ *  1. Appends body directly from readBuffer
+ *  2. Tracks total bytes sent
+ *
+ * Finally:
+ *  - Updates backpressure state
+ *  - Syncs CGI input FD with epoll
+ */
 void Webserv::streamClientBodyToCgi(ClientState& client, CgiContext* ctx,
                                     bool includeBodyFromHeaders, size_t bodyStart)
 {
@@ -771,6 +738,12 @@ void Webserv::streamClientBodyToCgi(ClientState& client, CgiContext* ctx,
     syncCgiInputFdState(ctx);
 }
 
+/* Applies backpressure to avoid excessive buffering
+ *  - Pauses client reading if CGI buffer is too large
+ *  - Resumes reading when buffer drops below threshold
+ *
+ * Prevents memory overuse during large uploads
+ */
 void Webserv::updateCgiBackpressure(ClientState& client, CgiContext* ctx)
 {
     const size_t kCgiBufferHighWatermark = 512 * 1024;
@@ -793,6 +766,9 @@ void Webserv::updateCgiBackpressure(ClientState& client, CgiContext* ctx)
     }
 }
 
+/* Sets epoll interest for a client FD
+ * Uses EPOLL_CTL_MOD, falls back to ADD if FD not registered
+ */
 void Webserv::setClientEpollInterest(int fd, uint32_t events)
 {
     struct epoll_event ev;
@@ -804,6 +780,14 @@ void Webserv::setClientEpollInterest(int fd, uint32_t events)
         epoll_ctl(this->epollFd, EPOLL_CTL_ADD, fd, &ev);
 }
 
+/* Synchronizes client epoll state based on current needs
+ *
+ * Determines:
+ *  - Read interest (EPOLLIN)
+ *  - Write interest (EPOLLOUT)
+ *
+ * Removes FD from epoll if no events are needed
+ */
 void Webserv::syncClientEpollInterest(ClientState& client)
 {
     if (this->clients.find(client.fd) == this->clients.end())
@@ -828,6 +812,12 @@ void Webserv::syncClientEpollInterest(ClientState& client)
     setClientEpollInterest(client.fd, events);
 }
 
+/* Handles CGI pipe events:
+ *  - Writes request body to CGI stdin (inFd)
+ *  - Reads CGI output from stdout (outFd)
+ *  - Manages partial writes and reads
+ *  - Finalizes response when CGI finishes execution
+ */
 void Webserv::handleCgiEvent(int fd, uint32_t events)
 {
     const size_t kCgiProgressStepBytes = 10 * 1024 * 1024;
@@ -837,7 +827,7 @@ void Webserv::handleCgiEvent(int fd, uint32_t events)
 
     CgiContext* ctx = _cgiFds[fd];
 
-    // --- 1. ESCRITURA AL CGI (Hacia el inFd / Pipe 8) ---
+    /* WRITING to CGI (stdin / inFd) */
     if (fd == ctx->inFd && (events & EPOLLOUT))
     {
         const size_t pending = getCgiPendingBytes(ctx);
@@ -894,8 +884,11 @@ void Webserv::handleCgiEvent(int fd, uint32_t events)
         syncCgiInputFdState(ctx);
     }
 
-    // --- 2. LECTURA DEL CGI (Desde el outFd / Pipe 9) ---
-    // IMPORTANTE: Un 'if' nuevo, no un 'else if'
+    /* READING from CGI (stdout / outFd)
+    *
+    * IMPORTANT:
+    * These are independent checks (NOT else-if),
+    * since both events may occur simultaneously  */
     if (_cgiFds.count(fd) && fd == ctx->outFd && (events & (EPOLLIN | EPOLLHUP | EPOLLERR)))
     {
         char buffer[32768];
@@ -927,10 +920,15 @@ void Webserv::handleCgiEvent(int fd, uint32_t events)
     }
 }
 
-/*
- * Handles a client socket event:
- *  - Reads the HTTP request
- *  - ...
+/* Handles client read events:
+ *  - Receives incoming data (non-blocking)
+ *  - Parses HTTP request incrementally
+ *  - Supports:
+ *      • Content-Length bodies
+ *      • Chunked transfer encoding
+ *  - Performs early validation (413, malformed headers)
+ *  - Streams body directly to CGI when required
+ *  - Dispatches fully parsed requests to router
  */
 void Webserv::handleClientData(int fd, uint32_t events)
 {
@@ -1149,7 +1147,7 @@ void Webserv::handleClientData(int fd, uint32_t events)
                 maxBody = loc->client_max_body_size;
 
             // Important: bodyAvailable includes chunk metadata, so this early check
-            // is reliable only for non-chunked bodies.
+            // is reliable only for non-chunked bodies
             if (maxBody > 0 && !client.requestIsChunked && bodyAvailable > maxBody)
             {
                 if (DEBUG)
@@ -1351,7 +1349,6 @@ void Webserv::handleClientData(int fd, uint32_t events)
             if (!requestComplete)
                 return;
         }
-        // ------------------------------------------------------------
         bool requestReady = false;
         if (client.requestHasContentLength && !client.requestIsChunked)
         {
@@ -1413,7 +1410,7 @@ void Webserv::handleClientData(int fd, uint32_t events)
 
             Config* server = &this->clients[fd].config;
 
-            // Aquí es donde el router decide si es CGI
+            // Router determines whether this request must be handled as CGI
             HttpResponse res = routeRequest(client.request, *server);
 
             if (res.getIsCgi())
@@ -1422,7 +1419,7 @@ void Webserv::handleClientData(int fd, uint32_t events)
                     logDebug(PURPLE, "[ROUTE] request routed to CGI handler, waiting for CGI "
                                      "output...handleCgiEvent will take care of the rest.");
                 // For CGI we keep client.request body for async pipe writing,
-                // but raw readBuffer is no longer needed.
+                // but raw readBuffer is no longer needed
                 client.readBuffer.clear();
                 client.headersLogged = false;
                 client.lastBodyLogCheckpoint = 0;
@@ -1461,7 +1458,7 @@ void Webserv::handleClientData(int fd, uint32_t events)
         client.headersLogged = false;
         client.lastBodyLogCheckpoint = 0;
         client.resetRequestCache();
-        // CAMBIO A MODO ESCRITURA (EPOLLOUT)
+        // Switch to write mode (EPOLLOUT)
         setClientEpollInterest(fd, EPOLLOUT);
     }
 }
@@ -1519,7 +1516,7 @@ void Webserv::handleClientWrite(int fd, uint32_t events)
         return;
     }
 
-    // FINALIZACIÓN:
+    // FINISH
     if (client.bytesSent >= client.writeBuffer.size())
     {
         if (DEBUG)
@@ -1532,6 +1529,13 @@ void Webserv::handleClientWrite(int fd, uint32_t events)
     }
 }
 
+/* Closes a client connection and cleans up associated resources
+ * - Finds all CGI contexts linked to this client FD
+ * - Avoids duplicating contexts (same ctx can appear twice via inFd/outFd)
+ * - Destroys all related CGI contexts
+ * - Removes FD from epoll
+ * - Erases client state and closes socket
+ */
 void Webserv::closeConnection(int fd)
 {
     std::vector<CgiContext*> contextsToDestroy;
@@ -1575,6 +1579,19 @@ void Webserv::closeConnection(int fd)
  *     -> If that fd is a listening socket, accepts new client connections on sockets
  *     -> Otherwise, client request is processed
  *  - Handles client activity on connected sockets
+ *  
+ * 
+ * epoll_wait()
+ *     ↓
+ *  fd event detected
+ *     ↓
+ *  ├── listening fd → acceptNewConnection()
+ *  ├── CGI fd       → handleCgiEvent()
+ *  └── client fd
+ *         ├── EPOLLIN  → handleClientData()
+ *         └── EPOLLOUT → handleClientWrite()
+ *
+ *-----------------------------------------------------------------------*-------------
  */
 void Webserv::run()
 {
