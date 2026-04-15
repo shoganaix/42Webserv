@@ -1,7 +1,59 @@
+<!-- -------------------------------------------------
+     📌 HTML PAGE
+     ◉ tours1.html
+     - Test page for /tours route
+     - Used to validate:
+         • Static file serving
+         • Location /tours + index resolution
+-------------------------------------------------- -->
+
 <!DOCTYPE html>
 <html lang="es">
-<head><meta charset="UTF-8"><title>webserv ok</title></head>
+<head>
+  <meta charset="UTF-8">
+  <title>Tours</title>
+
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 40px;
+      background: #f7f7fb;
+      color: #222;
+    }
+
+    .card {
+      background: white;
+      border-radius: 12px;
+      padding: 20px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.08);
+    }
+
+    a {
+      color: #0056b3;
+      text-decoration: none;
+    }
+
+    a:hover {
+      text-decoration: underline;
+    }
+  </style>
+</head>
+
 <body>
-  <h1>Tours 1</h1>
+
+  <div class="card">
+    <h1>Tours Page</h1>
+
+    <p>This page is used to test the <code>/tours</code> route.</p>
+
+    <ul>
+      <li>✔ Static file serving</li>
+      <li>✔ Location index resolution</li>
+      <li>✔ GET request handling</li>
+    </ul>
+
+    <p><a href="/">⬅ Back to index</a></p>
+  </div>
+
 </body>
 </html>

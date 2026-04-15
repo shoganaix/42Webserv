@@ -1,0 +1,72 @@
+🔹 Configuration 1: default.conf (Official tester setup)
+
+Run:
+./webserv
+
+◉ Basic HTTP tests:
+curl -i http://localhost:8080/
+→ Expect: 200 OK
+
+curl -i -X POST http://localhost:8080/
+→ Expect: 405 Method Not Allowed
+
+curl -i -X POST http://localhost:8080/post_body -d "1234567890"
+→ Expect: 200 OK
+
+curl -i -X POST http://localhost:8080/post_body -d "$(python3 -c 'print("a"*101)')"
+→ Expect: 413 Payload Too Large
+
+◉ Directory / alias tests:
+curl -i http://localhost:8080/directory/
+→ Expect: 200 OK
+
+curl -i http://localhost:8080/directory/nop/youpi.bad_extension
+→ Expect: 200 OK
+
+◉ CGI by extension (.bla):
+curl -i -X POST http://localhost:8080/directory/youpi.bla -d "hello"
+→ Expect: CGI executed (cgi_test output)
+
+🔹 Configuration 2: manual_test.conf (Development & extended testing)
+
+Run:
+./webserv configs/manual_test.conf
+
+◉ Basic HTTP tests:
+curl -i http://localhost:8080/
+curl -i -X POST http://localhost:8080/
+curl -i -X POST http://localhost:8080/post_body -d "1234567890"
+curl -i -X POST http://localhost:8080/post_body -d "$(python3 -c 'print("a"*101)')"
+
+◉ Advanced routing tests:
+curl -i http://localhost:8080/red
+→ Expect: redirect (302 + Location header)
+
+curl -i http://localhost:8080/does-not-exist
+→ Expect: custom 404 page
+
+curl -i http://localhost:8080/tours
+→ Expect: tours1.html content
+
+◉ Directory / alias tests:
+curl -i http://localhost:8080/directory/
+→ Expect: 200 OK and the contents of youpi.bad_extension (if the file is not empty)
+
+curl -i http://localhost:8080/directory/nop/
+→ Expect: 200 OK and the contents of nop/youpi.bad_extension (if the file is not empty)
+
+◉ CGI tests:
+curl -i http://localhost:8080/cgi-bin/time.py
+curl -i "http://localhost:8080/cgi-bin/time.py?name=maria&x=1"
+curl -i -X POST http://localhost:8080/cgi-bin/time.py -d "hello=world"
+
+◉ Additional method test:
+curl -i -X DELETE http://localhost:8080/tours1.html
+
+◉ Chunked request test:
+printf 'POST /cgi-bin/time.py HTTP/1.1\r\nHost: localhost:8080\r\nTransfer-Encoding: chunked\r\n\r\n5\r\nhello\r\n0\r\n\r\n' | nc localhost 8080
+
+→ Expect:
+- no crash
+- valid HTTP response
+- CGI receives decoded body

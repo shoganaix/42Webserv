@@ -1,3 +1,5 @@
+*This project has been created as part of the 42 curriculum by macastro, angnavar, kpineda- and msoriano*
+
 # Webserv
 **The objective of this project is to create a simple HTTP web server in C++ that handles multiple clients, supports GET and POST requests, and serves static files.**
 
@@ -10,15 +12,18 @@
 * [Features](#features)
 * [Methods](#http-methods)
 * [Usage](#usage)
+* [Project Structure](#project-structure)
 * [Final Grade](#grade)
 
 ## Documentation
 For all the documentation you may need go to our [wiki](https://github.com/shoganaix/42Webserv/wiki)
 
 ## Project Description
-Webserv is a C++ HTTP server capable of handling multiple clients using `poll()`.
-It parses HTTP requests according to the standard, serves static files, handles error pages, and can implement multiple server configurations using a `.conf` file.
-HTTP Message can be either a request or response.
+**Webserv** is a custom HTTP server written in **C++98** capable of handling multiple clients using `poll()`.
+
+The goal of this project is to understand how web servers work internally by implementing the core parts of HTTP request handling, routing, static file serving, CGI execution, uploads, redirections, error handling, and non-blocking I/O using a single event loop mechanism.
+Our server is executed with a `.conf` file and supports different server blocks, route-based configuration, CGI by file extension, request body limits, custom error pages, and multiple HTTP methods.
+This project was developed as a practical implementation of the concepts behind HTTP servers such as NGINX, while respecting the constraints of the 42 subject.
 
 For more detailed information, refer to the [**subject**](https://github.com/shoganaix/42Webserv/blob/main/en.subject.pdf)
 
@@ -45,16 +50,30 @@ Content-Length: 1234
 ---
 
 ## Features
+- **Configuration** file **parsing** ✔️
+- **Multiple server** blocks / ports ✔️
+- Non-blocking sockets with **epoll** ✔️
+- **Route matching** ✔️
 - **Concurrent connections** ✔️
 - **HTTP Protocol: GET, POST, DELETE ...** ✔️
 - **Serving Static & Dynamic content** ✔️
-- **Suppports Config files** ✔️
 - **Error handling** ✔️
+- Directory listing with **autoindex** ✔️
+- **Redirections** ✔️
+- **CGI execution** by file extension ✔️
+- **Chunked request** body decoding ✔️
 - **Supports cookies and session management** ❌
 - **Handles multiple CGI** ❌
 
+### Project-specific behavior
+- CGI detection is based on file extension configured through `cgi_ext`
+- CGI routing has priority over regular `allow_methods` checks
+- As a result, a CGI file can accept `POST` even if its location is declared as `GET`-only
+- Chunked request bodies are decoded before being forwarded to CGI
+- The server closes connections after sending the response (no keep-alive)
+
 ---
-## HTTP Methods
+### HTTP Methods
 Method        | Description
 ------------- | -------------
 GET ✔️        | Retrieve a specific resource or a collection of resources, should not affect the data/resource
@@ -66,6 +85,7 @@ OPTIONS ❌    | Describe the communication options for the target resource
 PATCH ❌      | Apply partial modifications to a resource
 
 ---
+
 ## Usage
 
 1. Clone this repository:
@@ -82,11 +102,11 @@ make
 ./webserv [Config File] ## leave empty to use the default configuration
 ```
 
-## Pre-commit
+### Pre-commit
 
 This repository includes a pre-commit setup to keep commits clean and consistent.
 
-### What it checks
+#### What it checks
 - Trailing whitespace and end-of-file newlines
 - Merge conflict markers
 - Large files accidentally added
@@ -119,6 +139,27 @@ pre-commit run
 pre-commit run file1.cpp
 # all files
 pre-commit run --all-files
+```
+
+## Project Structure
+
+```text
+.
+├── Makefile
+├── README.md
+├── default.conf
+├── getonly.conf
+├── nocgi.conf
+├── docs/
+│   ├── fusion_web/
+│   │   ├── index.html
+│   │   ├── tours1.html
+│   │   └── error_pages/
+│   │       └── 404.html
+│   └── cgi-bin/
+│       └── time.py
+├── uploads/
+└── src/...
 ```
 
 ## Grade
