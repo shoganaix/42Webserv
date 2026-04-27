@@ -42,6 +42,9 @@
 #include "cgiHandler.hpp"
 #include "pathResolver.hpp"
 
+
+bool Webserv::_running = true; // Initialize the static running variable
+
 /* Returns number of pending bytes to be written to CGI stdin
  * (writeBuffer - writeOffset)
  */
@@ -844,9 +847,6 @@ void Webserv::handleCgiEvent(int fd, uint32_t events)
                 {
                     ctx->progressLogCheckpoint =
                         (ctx->bytesWritten / kCgiProgressStepBytes) * kCgiProgressStepBytes;
-                    std::cout << "[CGI-STREAM] client_fd=" << ctx->clientFd
-                              << " written=" << ctx->bytesWritten
-                              << " pending=" << getCgiPendingBytes(ctx) << std::endl;
                 }
 
                 if (ctx->writeOffset == ctx->writeBuffer.size())
@@ -905,10 +905,7 @@ void Webserv::handleCgiEvent(int fd, uint32_t events)
         }
         else if (n == 0)
         {
-            std::cout << "[CGI-DONE] client_fd=" << ctx->clientFd
-                      << " written=" << ctx->bytesWritten
-                      << " response_bytes=" << ctx->rawResponse.size() << std::endl;
-            logDebug(GREEN, std::string("[CGI] Output completo bytes=") +
+            logDebug(GREEN, std::string("[CGI-DONE] Output completo bytes=") +
                                 to_string(ctx->rawResponse.size()));
             finalizeCgiResponse(ctx, fd);
         }
@@ -1610,11 +1607,13 @@ void Webserv::run()
 
     // Ignore SIGPIPE -> avoid crashing when writing to a closed socket
     signal(SIGPIPE, SIG_IGN);
+    _running = true;
+    signal(SIGINT, Webserv::_handle_signal); // Handle Ctrl+C
 
     std::cout << GREEN << "Webserv running..." << RESET << std::endl;
 
     epoll_event epoll_events[100];
-    while (true)
+    while (_running)
     {
         while (waitpid(-1, NULL, WNOHANG) > 0)
         {
@@ -1657,4 +1656,10 @@ void Webserv::run()
             }
         }
     }
+
+}
+
+void Webserv::_handle_signal(int signal) {
+    (void)signal;
+    Webserv::_running = false;
 }

@@ -188,6 +188,9 @@ class Webserv
     void run();
 
   private:
+    static bool _running;
+
+    static void _handle_signal(int signal);
     void setSockets();
     bool isListeningFd(int fd);
     void acceptNewConnection(int fd);

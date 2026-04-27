@@ -234,12 +234,7 @@ CgiResult CgiHandler::execute(const HttpRequest& req, const CgiTarget& target,
             std::cerr << "[ERROR] CGI: Binario no encontrado o sin permisos: " << argv[0]
                       << std::endl;
             exit(1);
-        }
-        // ------------------- DEBUG: ---------------------
-        std::cerr << "[CGI-DEBUG] handler=" << argv[0]
-          << " script=" << target.scriptPath
-          << " cwd=" << target.workingDir << std::endl;
-        // ------------------------------------------------     
+        }   
         execve(argv[0], &argv[0], &envp[0]);
         _exit(127);
     }
