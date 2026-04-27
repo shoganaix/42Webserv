@@ -600,6 +600,10 @@ void Webserv::finalizeCgiResponse(CgiContext* ctx, int fd)
     {
         this->clients[ctx->clientFd].writeBuffer = res.toString(false);
         this->clients[ctx->clientFd].bytesSent = 0;
+        
+        // Log CGI response
+        logInfo("CGI -> " + to_string(res.getStatusCode()));
+        
         setClientEpollInterest(ctx->clientFd, EPOLLOUT);
     }
 
@@ -1436,6 +1440,11 @@ void Webserv::handleClientData(int fd, uint32_t events)
             // -----------------------------------------
             client.writeBuffer = res.toString(client.request.getMethod() == "HEAD");
             client.bytesSent = 0;
+            
+            // Log the response
+            logInfo(client.request.getMethod() + " " + client.request.getPath() + 
+                   " -> " + to_string(res.getStatusCode()));
+            
             setClientEpollInterest(fd, EPOLLOUT);
 
             client.readBuffer.clear();
