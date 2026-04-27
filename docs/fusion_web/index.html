@@ -89,6 +89,16 @@
   </div>
 
   <div class="card">
+    <h2>File Upload tests</h2>
+    <p>Upload a file to <code>/upload</code>:</p>
+    <form id="uploadForm" enctype="multipart/form-data" class="upload-form">
+      <input type="file" name="file" required>
+      <button type="submit">Enviar archivo</button>
+    </form>
+    <p id="uploadResult" class="note" style="margin-top: 10px; display: none;"></p>
+  </div>
+
+  <div class="card">
     <h2>Bad request tests</h2>
     <p>Invalid method:</p>
     <code>printf 'BREW / HTTP/1.1\r\nHost: localhost:8080\r\n\r\n' | nc localhost 8080</code>
@@ -96,5 +106,71 @@
     <p>Malformed request:</p>
     <code>printf 'GARBAGE\r\n\r\n' | nc localhost 8080</code>
   </div>
+
+  <script>
+    document.getElementById('uploadForm').addEventListener('submit', function(e) {
+      e.preventDefault();
+      
+      const fileInput = this.querySelector('input[type="file"]');
+      const fileName = fileInput.files[0]?.name;
+      const resultDiv = document.getElementById('uploadResult');
+      
+      if (!fileName) {
+        resultDiv.textContent = '❌ No file selected';
+        resultDiv.style.display = 'block';
+        return;
+      }
+      
+      const formData = new FormData(this);
+      
+      fetch('/upload', {
+        method: 'POST',
+        body: formData
+      })
+      .then(response => {
+        resultDiv.style.display = 'block';
+        if (response.ok) {
+          resultDiv.textContent = '✅ File uploaded successfully: ' + fileName;
+          resultDiv.style.color = 'green';
+          fileInput.value = ''; // Clear input
+          setTimeout(() => resultDiv.style.display = 'none', 3000);
+        } else {
+          resultDiv.textContent = '❌ Upload failed: ' + response.status + ' ' + response.statusText;
+          resultDiv.style.color = 'red';
+        }
+      })
+      .catch(error => {
+        resultDiv.textContent = '❌ Error: ' + error.message;
+        resultDiv.style.color = 'red';
+        resultDiv.style.display = 'block';
+      });
+    });
+  </script>
+
+  <style>
+    .upload-form {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+    }
+
+    .upload-form input[type="file"] {
+      flex: 1;
+    }
+
+    .upload-form button {
+      background: #0056b3;
+      color: white;
+      border: none;
+      padding: 8px 16px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 0.95em;
+    }
+
+    .upload-form button:hover {
+      background: #003d82;
+    }
+  </style>
 </body>
 </html>

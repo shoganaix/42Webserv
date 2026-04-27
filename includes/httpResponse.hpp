@@ -24,6 +24,9 @@
 #include <map>
 #include <vector>
 
+// Forward declaration
+class HttpRequest;
+
 struct Location
 {
     // In C++98, if you don't define a constructor, those fields can remain undefined
@@ -89,7 +92,8 @@ class HttpResponse
     bool savePostFile(const std::string& uploadPath, const std::string& body,
                       const std::string& filename);
     // void handlePost(const std::string &body, const Location &loc);
-    void handlePost(const std::string& resolved, const std::string& body, const Location& loc);
+    void handlePost(const std::string& resolved, const std::string& body, const Location& loc,
+                    const HttpRequest& req);
 
     void setRedirect(const std::string& location, int code);
 

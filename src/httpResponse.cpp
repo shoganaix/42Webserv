@@ -14,6 +14,7 @@
 */
 
 #include "httpResponse.hpp"
+#include "httpRequest.hpp"
 #include "pathResolver.hpp"
 #include "colors.hpp"
 #include "utils.hpp"
@@ -29,6 +30,84 @@
 /* Static member definitions */
 std::map<int, std::string> HttpResponse::statusMessages;
 std::map<std::string, std::string> HttpResponse::mimeTypes;
+
+/* Extrae el nombre del archivo desde el header Content-Disposition
+ * Formato: Content-Disposition: form-data; name="file"; filename="miphoto.jpg"
+ */
+static std::string extractFileNameFromMultipart(const std::string& body,
+                                                const std::string& boundary)
+{
+    (void)boundary; // No usado en esta versión simple
+    size_t filenamePos = body.find("filename=\"");
+    if (filenamePos == std::string::npos)
+        return "upload"; // nombre por defecto
+
+    filenamePos += 10; // len("filename=\"")
+    size_t endPos = body.find("\"", filenamePos);
+
+    if (endPos == std::string::npos)
+        return "upload";
+
+    std::string fileName = body.substr(filenamePos, endPos - filenamePos);
+
+    // Limpiar caracteres peligrosos
+    for (size_t i = 0; i < fileName.length(); ++i)
+    {
+        if (fileName[i] == '/' || fileName[i] == '\\' || fileName[i] == ':')
+            fileName[i] = '_';
+    }
+
+    return fileName;
+}
+
+/* Extrae el contenido binario del archivo desde multipart/form-data
+ */
+static std::string extractFileContentFromMultipart(const std::string& body,
+                                                   const std::string& boundary)
+{
+    // Buscar el final de los headers (doble CRLF)
+    size_t headerEnd = body.find("\r\n\r\n");
+    if (headerEnd == std::string::npos)
+    {
+        headerEnd = body.find("\n\n");
+        if (headerEnd == std::string::npos)
+            return body; // fallback: devolver todo
+
+        size_t contentStart = headerEnd + 2; // saltar "\n\n"
+
+        // Buscar el boundary final
+        std::string boundaryMarker = "--" + boundary + "--";
+        size_t contentEnd = body.find(boundaryMarker);
+        if (contentEnd == std::string::npos)
+            contentEnd = body.find("--" + boundary);
+
+        if (contentEnd == std::string::npos)
+            contentEnd = body.length();
+
+        // Eliminar el LF antes del boundary
+        if (contentEnd > 1 && body[contentEnd - 1] == '\n')
+            contentEnd -= 1;
+
+        return body.substr(contentStart, contentEnd - contentStart);
+    }
+
+    size_t contentStart = headerEnd + 4; // saltar "\r\n\r\n"
+
+    // Buscar el boundary final
+    std::string boundaryMarker = "--" + boundary + "--";
+    size_t contentEnd = body.find(boundaryMarker);
+    if (contentEnd == std::string::npos)
+        contentEnd = body.find("--" + boundary);
+
+    if (contentEnd == std::string::npos)
+        contentEnd = body.length();
+
+    // Eliminar el CRLF antes del boundary
+    if (contentEnd > 2 && body[contentEnd - 2] == '\r' && body[contentEnd - 1] == '\n')
+        contentEnd -= 2;
+
+    return body.substr(contentStart, contentEnd - contentStart);
+}
 
 /* Initializes HTTP response with default values
  * - Sets HTTP version to 1.1
@@ -361,14 +440,61 @@ bool HttpResponse::savePostFile(const std::string& uploadPath, const std::string
  *    Otherwise            -> 201 Created
  */
 void HttpResponse::handlePost(const std::string& resolved, const std::string& body,
-                              const Location& loc)
+                              const Location& loc, const HttpRequest& req)
 {
-    (void)loc;
+    // Extraer boundary del Content-Type si es multipart
+    std::string boundary = "";
+    std::string contentType = "";
+    
+    const std::map<std::string, std::string>& reqHeaders = req.getHeaders();
+    std::map<std::string, std::string>::const_iterator it = reqHeaders.find("Content-Type");
+    if (it == reqHeaders.end())
+        it = reqHeaders.find("content-type");
+    if (it != reqHeaders.end())
+        contentType = it->second;
 
-    struct stat s;
-    bool existedBefore = (stat(resolved.c_str(), &s) == 0);
+    std::string fileName = "upload"; // nombre por defecto
+    std::string fileContent = body;
 
-    std::ofstream file(resolved.c_str(), std::ios::out | std::ios::binary);
+    if (contentType.find("multipart/form-data") != std::string::npos)
+    {
+        size_t boundaryPos = contentType.find("boundary=");
+        if (boundaryPos != std::string::npos)
+        {
+            boundary = contentType.substr(boundaryPos + 9);
+            // Eliminar comillas si existen
+            if (!boundary.empty() && boundary[0] == '"')
+                boundary = boundary.substr(1, boundary.find('"', 1) - 1);
+
+            fileName = extractFileNameFromMultipart(body, boundary);
+            fileContent = extractFileContentFromMultipart(body, boundary);
+        }
+    }
+
+    // Usar upload_path de la configuración si está disponible
+    std::string uploadDir = resolved;
+    if (!loc.upload_path.empty())
+    {
+        uploadDir = loc.upload_path;
+        // Si no es una ruta absoluta y comienza con ./, quitamos el ./
+        if (uploadDir.substr(0, 2) == "./")
+        {
+            uploadDir = uploadDir.substr(2);
+        }
+        // Si no es una ruta absoluta, usar root + upload_path
+        if (!uploadDir.empty() && uploadDir[0] != '/')
+        {
+            uploadDir = loc.root + "/" + uploadDir;
+        }
+    }
+
+    // Asegurar que la ruta termina con /
+    if (!uploadDir.empty() && uploadDir[uploadDir.size() - 1] != '/')
+        uploadDir += "/";
+
+    std::string fullPath = uploadDir + fileName;
+
+    std::ofstream file(fullPath.c_str(), std::ios::out | std::ios::binary);
     if (!file.is_open())
     {
         setStatusCode(500);
@@ -378,7 +504,7 @@ void HttpResponse::handlePost(const std::string& resolved, const std::string& bo
         return;
     }
 
-    file.write(body.data(), body.size());
+    file.write(fileContent.data(), fileContent.size());
     file.close();
 
     if (!file)
@@ -389,8 +515,8 @@ void HttpResponse::handlePost(const std::string& resolved, const std::string& bo
         return;
     }
 
-    setStatusCode(existedBefore ? 200 : 201);
-    setBody("<html><body><h1>POST OK</h1></body></html>");
+    setStatusCode(201); // Created
+    setBody("<html><body><h1>POST OK - File: " + fileName + "</h1></body></html>");
     addHeader("Content-Type", "text/html");
 }
 

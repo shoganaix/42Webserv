@@ -570,7 +570,7 @@ HttpResponse Webserv::routeRequest(const HttpRequest& req, const Config& server)
     if (req.getMethod() == "GET" || req.getMethod() == "HEAD")
         res.handleGet(relativePath, *loc);
     else if (req.getMethod() == "POST")
-        res.handlePost(resolved.fsPath, req.getBody(), *loc);
+        res.handlePost(resolved.fsPath, req.getBody(), *loc, req);
     else if (req.getMethod() == "DELETE")
         res.handleDelete(relativePath, *loc);
     else
