@@ -403,7 +403,7 @@ HttpResponse Webserv::routeRequest(const HttpRequest& req, const Config& server)
         logDebug(RED, "[ROUTE] no matching location");
         // ----------------------------------------
         res.setStatusCode(404);
-        res.setBody("<html><body><h1>404 Not Found</h1></body></html>");
+        res.setBody("<html><body><h1>404 Not Found!</h1></body></html>");
         res.addHeader("Content-Type", "text/html");
         return (res);
     }
@@ -834,6 +834,7 @@ void Webserv::handleCgiEvent(int fd, uint32_t events)
         if (pending > 0)
         {
             ssize_t n = write(fd, ctx->writeBuffer.data() + ctx->writeOffset, pending);
+
             if (n > 0)
             {
                 ctx->bytesWritten += n;
@@ -866,16 +867,20 @@ void Webserv::handleCgiEvent(int fd, uint32_t events)
                     updateCgiBackpressure(client, ctx);
                 }
             }
+            else if (n == 0)
+            {
+                // write() returned 0: no bytes written but not an error
+                // The pipe is OK but buffer is full or other transient condition
+                // Just skip and wait for the next epoll event
+            }
             else if (n < 0)
             {
-                if ((events & (EPOLLERR | EPOLLHUP)) != 0)
+                // write() failed - close the pipe immediately (error handling)
+                closeCgiPipe(ctx, ctx->inFd);
+                if (this->clients.count(ctx->clientFd))
                 {
-                    closeCgiPipe(ctx, ctx->inFd);
-                    if (this->clients.count(ctx->clientFd))
-                    {
-                        ClientState& client = this->clients[ctx->clientFd];
-                        updateCgiBackpressure(client, ctx);
-                    }
+                    ClientState& client = this->clients[ctx->clientFd];
+                    updateCgiBackpressure(client, ctx);
                 }
                 return;
             }
@@ -909,12 +914,8 @@ void Webserv::handleCgiEvent(int fd, uint32_t events)
         }
         else if (n < 0)
         {
-            if ((events & (EPOLLERR | EPOLLHUP)) != 0)
-            {
-                destroyCgiContext(ctx, true);
-                return;
-            }
-            // Keep waiting for readiness changes for non-terminal readiness notifications.
+            // read() failed - destroy CGI context immediately (error handling)
+            destroyCgiContext(ctx, true);
             return;
         }
     }
@@ -946,7 +947,10 @@ void Webserv::handleClientData(int fd, uint32_t events)
     ssize_t bytes = recv(fd, buffer, sizeof(buffer), 0);
 
     if (bytes < 0)
+    {
+        this->closeConnection(fd);
         return;
+    }
     if (bytes == 0)
     {
         this->closeConnection(fd);
@@ -1473,6 +1477,7 @@ void Webserv::handleClientData(int fd, uint32_t events)
  */
 void Webserv::handleClientWrite(int fd, uint32_t events)
 {
+    (void)events;
     if (this->clients.find(fd) == this->clients.end())
         return;
 
@@ -1509,10 +1514,16 @@ void Webserv::handleClientWrite(int fd, uint32_t events)
                                 "/" + to_string(client.writeBuffer.size()));
         }
     }
+    else if (sent == 0)
+    {
+        // send() returned 0: no bytes sent but not an error
+        // The socket buffer is full or other transient condition
+        // Just skip and wait for the next epoll event
+    }
     else if (sent < 0)
     {
-        if (events & (EPOLLERR | EPOLLHUP))
-            this->closeConnection(fd);
+        // send() failed - close connection immediately (error handling)
+        this->closeConnection(fd);
         return;
     }
 
