@@ -6,7 +6,7 @@
 /*   By: usuario <usuario@student.42.fr>            +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/02/20 13:48:49 by kpineda-          #+#    #+#             */
-/*   Updated: 2026/04/27 22:03:20 by usuario          ###   ########.fr       */
+/*   Updated: 2026/04/27 22:51:02 by usuario          ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -42,6 +42,53 @@
 /* Static member definitions */
 std::map<int, std::string> HttpResponse::statusMessages;
 std::map<std::string, std::string> HttpResponse::mimeTypes;
+
+/* Sets HTTP error response page
+ * 1. Sets status code
+ * 2. Checks if a custom error page is defined in config
+ * 3. If found:
+ *      - Resolves path relative to root
+ *      - Loads file content as response body
+ * 4. If not found or cannot be opened
+ *      - Generates default HTML error page (uses known status message if available)
+ * 5. Sets Content-Type to text/html
+ */
+void HttpResponse::setErrorPage(int code, const std::map<int, std::string>& errorPages, const std::string& root)
+{
+    setStatusCode(code);
+
+    std::map<int, std::string>::const_iterator it = errorPages.find(code);
+    if (it != errorPages.end())
+    {
+        std::string path = it->second;
+
+        if (!path.empty() && path[0] == '/')
+            path = root + path;
+        else
+            path = root + "/" + path;
+
+        std::ifstream file(path.c_str(), std::ios::in | std::ios::binary);
+        if (file.is_open())
+        {
+            std::stringstream ss;
+            ss << file.rdbuf();
+            setBody(ss.str());
+            addHeader("Content-Type", "text/html");
+            return;
+        }
+    }
+
+    std::stringstream fallback;
+    fallback << "<html><body><h1>" << code << " ";
+    if (statusMessages.count(code))
+        fallback << statusMessages[code];
+    else
+        fallback << "Error";
+
+    fallback << "</h1></body></html>";
+    setBody(fallback.str());
+    addHeader("Content-Type", "text/html");
+}
 
 /* Extracts filename from a multipart/form-data request body
  * 1. Searches for the "filename=" field inside the multipart headers
@@ -268,25 +315,19 @@ std::string HttpResponse::generateAutoIndex(const std::string& path)
  * 7. Sets status code 200 on success
  * 8. Handles permission errors (403)
  */
-void HttpResponse::loadFile(const std::string& path)
+void HttpResponse::loadFile(const std::string& path, const std::map<int, std::string>& errorPages, const std::string& root)
 {
     struct stat path_stat;
     // Verify if the file exists and is a regular file
     if (stat(path.c_str(), &path_stat) != 0)
     {
-        // File doesn't exist or can't be accessed
-        setStatusCode(404);
-        setBody("<html><body><h1>404 Not Found</h1><p>The requested resource was not found on this "
-                "server.</p></body></html>");
-        addHeader("Content-Type", "text/html");
+        setErrorPage(404, errorPages, root);
         return;
     }
 
     if (!S_ISREG(path_stat.st_mode))
     {
-        setStatusCode(403);
-        setBody("<html><body><h1>403 Forbidden</h1></body></html>");
-        addHeader("Content-Type", "text/html");
+        setErrorPage(403, errorPages, root);
         return;
     }
     std::ifstream file(path.c_str(), std::ios::in | std::ios::binary);
@@ -318,10 +359,7 @@ void HttpResponse::loadFile(const std::string& path)
     else
     {
         // File exists but can't be opened (permissions issue)
-        setStatusCode(403);
-        setBody("<html><body><h1>403 Forbidden</h1><p>You don't have permission to access this "
-                "resource.</p></body></html>");
-        addHeader("Content-Type", "text/html");
+        setErrorPage(403, errorPages, root);
     }
 }
 
@@ -335,14 +373,12 @@ void HttpResponse::loadFile(const std::string& path)
  * 3. If path is a file:
  *      - Calls loadFile()
  */
-void HttpResponse::handleGet(const std::string& resolved, const Location& loc)
+void HttpResponse::handleGet(const std::string& resolved, const Location& loc, const std::map<int, std::string>& errorPages, const std::string& root)
 {
     struct stat s;
     if (stat(resolved.c_str(), &s) != 0)
     {
-        setStatusCode(404);
-        setBody("<html><body><h1>404 Not Found</h1></body></html>");
-        addHeader("Content-Type", "text/html");
+        setErrorPage(404, errorPages, root);
         return;
     }
 
@@ -359,7 +395,7 @@ void HttpResponse::handleGet(const std::string& resolved, const Location& loc)
             struct stat indexStat;
             if (stat(indexPath.c_str(), &indexStat) == 0 && S_ISREG(indexStat.st_mode))
             {
-                loadFile(indexPath);
+                loadFile(indexPath, errorPages, root);
                 return;
             }
         }
@@ -372,13 +408,11 @@ void HttpResponse::handleGet(const std::string& resolved, const Location& loc)
             return;
         }
         // If no index nor autoindex
-        setStatusCode(404);
-        setBody("<html><body><h1>404 Not Found</h1></body></html>");
-        addHeader("Content-Type", "text/html");
+        setErrorPage(404, errorPages, root);
         return;
     }
 
-    loadFile(resolved);
+    loadFile(resolved, errorPages, root);
 }
 
 /* Handles HTTP DELETE request

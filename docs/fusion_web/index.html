@@ -59,6 +59,24 @@
     <p class="note">Esta es la única ruta visual segura para hacer clic aquí.</p>
   </div>
 
+   <div class="card">
+    <h2>File Upload tests</h2>
+    <p>Upload a file to <code>/upload</code>:</p>
+    <form id="uploadForm" enctype="multipart/form-data" class="upload-form">
+      <input type="file" name="file" required>
+      <button type="submit">Enviar archivo</button>
+    </form>
+    <p id="uploadResult" class="note" style="margin-top: 10px; display: none;"></p>
+  </div>
+
+  <div class="card">
+    <h2>Custom error page test</h2>
+    <p>This should return the configured custom 404 page:</p>
+    <code>curl -i http://localhost:8080/nonexistent</code>
+    <p><a href="/nonexistent">Open custom 404 test</a></p>
+  </div>
+
+
   <div class="card">
     <h2>POST tests</h2>
     <p>POST should be rejected on <code>/</code>:</p>
@@ -68,8 +86,7 @@
     <code>curl -i -X POST http://localhost:8080/post_body -d "12345"</code>
 
     <p>POST body over 100 bytes should return 413:</p>
-    <code>curl -i -X POST http://localhost:8080/post_body -d "$(python3 -c 'print("a"*101)')"</code>
-  </div>
+    <code>curl -i -X POST http://localhost:8080/post_body -d "$(python3 -c 'print(&quot;a&quot;*101)')"</code>  </div>
 
   <div class="card">
     <h2>CGI tests</h2>
@@ -86,16 +103,6 @@
     <code>curl -i http://localhost:8080/directory/</code>
     <br><br>
     <code>curl -i http://localhost:8080/directory/nop/</code>
-  </div>
-
-  <div class="card">
-    <h2>File Upload tests</h2>
-    <p>Upload a file to <code>/upload</code>:</p>
-    <form id="uploadForm" enctype="multipart/form-data" class="upload-form">
-      <input type="file" name="file" required>
-      <button type="submit">Enviar archivo</button>
-    </form>
-    <p id="uploadResult" class="note" style="margin-top: 10px; display: none;"></p>
   </div>
 
   <div class="card">

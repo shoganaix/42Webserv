@@ -6,7 +6,7 @@
 /*   By: usuario <usuario@student.42.fr>            +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/02/20 13:48:43 by kpineda-          #+#    #+#             */
-/*   Updated: 2026/04/15 14:42:06 by usuario          ###   ########.fr       */
+/*   Updated: 2026/04/27 22:43:29 by usuario          ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -77,13 +77,14 @@ class HttpResponse
     const std::string& getBody() const { return body; }
     void addHeader(const std::string& key, const std::string& value);
     void handleGet(const std::string& path);
+    void setErrorPage(int code, const std::map<int, std::string>& errorPages, const std::string& root);
     void clear();
 
     // File loading method
-    void loadFile(const std::string& path);
+    void loadFile(const std::string& path, const std::map<int, std::string>& errorPages, const std::string& root);
     // Generate AutoIndex
     std::string generateAutoIndex(const std::string& path);
-    void handleGet(const std::string& url, const Location& loc);
+    void handleGet(const std::string& resolved, const Location& loc, const std::map<int, std::string>& errorPages, const std::string& root);
 
     // DELETE handling method
     void handleDelete(const std::string& url, const Location& loc);

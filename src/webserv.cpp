@@ -6,7 +6,7 @@
 /*   By: usuario <usuario@student.42.fr>            +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/01/08 18:51:13 by angnavar          #+#    #+#             */
-/*   Updated: 2026/04/15 15:17:52 by usuario          ###   ########.fr       */
+/*   Updated: 2026/04/27 22:43:33 by usuario          ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -405,9 +405,8 @@ HttpResponse Webserv::routeRequest(const HttpRequest& req, const Config& server)
         // -------------- DEBUG: ------------------
         logDebug(RED, "[ROUTE] no matching location");
         // ----------------------------------------
-        res.setStatusCode(404);
-        res.setBody("<html><body><h1>404 Not Found!</h1></body></html>");
-        res.addHeader("Content-Type", "text/html");
+       
+        res.setErrorPage(404, server.error_pages, server.root);
         return (res);
     }
     // ----------------------------------- DEBUG: ---------------------------------------
@@ -439,9 +438,7 @@ HttpResponse Webserv::routeRequest(const HttpRequest& req, const Config& server)
             logDebug(RED, bodyLimitMsg);
         }
         // ----------------------------------------------------------------------------------
-        res.setStatusCode(413);
-        res.setBody("<html><body><h1>413 Payload Too Large</h1></body></html>");
-        res.addHeader("Content-Type", "text/html");
+        res.setErrorPage(413, server.error_pages, server.root);
         return (res);
     }
 
@@ -477,9 +474,7 @@ HttpResponse Webserv::routeRequest(const HttpRequest& req, const Config& server)
             // -------------- DEBUG: ------------------
             logDebug(RED, "[ROUTE] returning 405");
             // ----------------------------------------
-            res.setStatusCode(405);
-            res.setBody("<html><body><h1>405 Method Not Allowed</h1></body></html>");
-            res.addHeader("Content-Type", "text/html");
+            res.setErrorPage(405, server.error_pages, server.root);
             return (res);
         }
     }
@@ -488,9 +483,7 @@ HttpResponse Webserv::routeRequest(const HttpRequest& req, const Config& server)
         // -------------- DEBUG: ------------------
         logDebug(RED, "[ROUTE] returning 405");
         // ----------------------------------------
-        res.setStatusCode(405);
-        res.setBody("<html><body><h1>405 Method Not Allowed</h1></body></html>");
-        res.addHeader("Content-Type", "text/html");
+        res.setErrorPage(405, server.error_pages, server.root);
         return (res);
     }
 
@@ -552,9 +545,7 @@ HttpResponse Webserv::routeRequest(const HttpRequest& req, const Config& server)
         }
         catch (std::exception& e)
         {
-            res.setStatusCode(500);
-            res.setBody("<html><body><h1>500 Internal Server Error</h1></body></html>");
-            res.addHeader("Content-Type", "text/html");
+            res.setErrorPage(405, server.error_pages, server.root);
             return (res);
         }
     }
@@ -568,17 +559,13 @@ HttpResponse Webserv::routeRequest(const HttpRequest& req, const Config& server)
 
     // 8. Dispatch method
     if (req.getMethod() == "GET" || req.getMethod() == "HEAD")
-        res.handleGet(relativePath, *loc);
+        res.handleGet(resolved.fsPath, *loc, server.error_pages, server.root);
     else if (req.getMethod() == "POST")
         res.handlePost(resolved.fsPath, req.getBody(), *loc, req);
     else if (req.getMethod() == "DELETE")
         res.handleDelete(relativePath, *loc);
     else
-    {
-        res.setStatusCode(405);
-        res.setBody("<html><body><h1>405 Method Not Allowed</h1></body></html>");
-        res.addHeader("Content-Type", "text/html");
-    }
+        res.setErrorPage(405, server.error_pages, server.root);
     return (res);
 }
 
