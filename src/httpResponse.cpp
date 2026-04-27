@@ -442,6 +442,17 @@ bool HttpResponse::savePostFile(const std::string& uploadPath, const std::string
 void HttpResponse::handlePost(const std::string& resolved, const std::string& body,
                               const Location& loc, const HttpRequest& req)
 {
+    (void)resolved; // Not used now since we use loc.upload_path
+    
+    // Si no hay upload_path configurado, rechazar con 405
+    if (loc.upload_path.empty())
+    {
+        setStatusCode(405);
+        setBody("<html><body><h1>405 Method Not Allowed</h1><p>POST not allowed on this route.</p></body></html>");
+        addHeader("Content-Type", "text/html");
+        return;
+    }
+
     // Extraer boundary del Content-Type si es multipart
     std::string boundary = "";
     std::string contentType = "";
