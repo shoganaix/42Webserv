@@ -141,42 +141,44 @@ pre-commit run --all-files
 
 ```text
 .
-├── Makefile
-├── README.md
-├── Subject.pdf
-├── EvaluationSheet.pdf
-├── tester
-├── cgi_tester
-├── run_tests.sh
-├── my_tester.py
-├── my_manual_tester.docx
-├── Dockerfile
-├── docker-readme.md
-├── pre-commit-config.yaml
-├── .clang-format
-├── .gitignore
+├── configs/
+│   ├── default.conf
+│   ├── my_tester.conf
+│   ├── new.conf
+│   └── nocgi.conf
+├── docs/
+│   ├── cgi-bin/
+│   │   └── time.py
+│   └── fusion_web/
+│       ├── index.html
+│       ├── tours1.html
+│       └── error_pages/
+│           └── 404.html
 ├── build/
 │   └──  src/
 │        └──  *.o
 ├── includes/
-│   └──  *.hpp
+│   └── *.hpp
 ├── src/
-│   └──  *.cpp
-├── configs/
-│   ├── default.conf
-│   ├── my_tester.conf
-│   └── nocgi.conf
-├── docs/
-│   ├── fusion_web/
-│   │   ├── index.html
-│   │   ├── tours1.html
-│   │   └── error_pages/
-│   │       └── 404.html
-│   └── cgi-bin/
-│       └── time.py
-├── uploads/
+│   └── *.cpp
+├── tests/
+│   ├── my_eval/
+│   ├── EvaluationSheet.pdf
+│   ├── my_manual_tester.docx
+│   ├── my_tester.py
+│   └── run_tests.sh
 ├── YoupiBanane/
-└── src/...
+│       └── ...
+├── .clang-format
+├── .gitignore
+├── .pre-commit-config.yaml
+├── cgi_tester
+├── docker-readme.md
+├── Dockerfile
+├── Makefile
+├── README.md
+├── Subject.pdf
+├── tester
 ```
 
 ## Grade
