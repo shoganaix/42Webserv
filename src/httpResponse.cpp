@@ -6,12 +6,24 @@
 /*   By: usuario <usuario@student.42.fr>            +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/02/20 13:48:49 by kpineda-          #+#    #+#             */
-/*   Updated: 2026/04/15 14:41:53 by usuario          ###   ########.fr       */
+/*   Updated: 2026/04/27 22:03:20 by usuario          ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
-/*  ....
-*/
+/*-----------------------------------------------------------------------
+ *                        🌐 HTTP RESPONSE 🌐
+ *
+ * Builds and manages HTTP responses sent to the client
+ *
+ * Handles:
+ *  - Status codes and headers
+ *  - Response body and Content-Length
+ *  - Static file serving and MIME types
+ *  - GET, POST (uploads), and DELETE methods
+ *  - Autoindex generation and redirections
+ *
+ * Ensures valid HTTP/1.1 responses with basic error handling
+ *-----------------------------------------------------------------------*/
 
 #include "httpResponse.hpp"
 #include "httpRequest.hpp"
@@ -31,18 +43,22 @@
 std::map<int, std::string> HttpResponse::statusMessages;
 std::map<std::string, std::string> HttpResponse::mimeTypes;
 
-/* Extrae el nombre del archivo desde el header Content-Disposition
- * Formato: Content-Disposition: form-data; name="file"; filename="miphoto.jpg"
+/* Extracts filename from a multipart/form-data request body
+ * 1. Searches for the "filename=" field inside the multipart headers
+ * 2. If no filename found or parsing fails -> returns default name ("upload")
+ * 3. Extracts filename value between quotes & sanitizes filename by replacing dangerous characters
+ *    ('/', '\', ':') with '_'
+ * 4. Returns sanitized filename
  */
 static std::string extractFileNameFromMultipart(const std::string& body,
                                                 const std::string& boundary)
 {
-    (void)boundary; // No usado en esta versión simple
+    (void)boundary;
     size_t filenamePos = body.find("filename=\"");
     if (filenamePos == std::string::npos)
-        return "upload"; // nombre por defecto
+        return "upload";
 
-    filenamePos += 10; // len("filename=\"")
+    filenamePos += 10;
     size_t endPos = body.find("\"", filenamePos);
 
     if (endPos == std::string::npos)
@@ -50,7 +66,6 @@ static std::string extractFileNameFromMultipart(const std::string& body,
 
     std::string fileName = body.substr(filenamePos, endPos - filenamePos);
 
-    // Limpiar caracteres peligrosos
     for (size_t i = 0; i < fileName.length(); ++i)
     {
         if (fileName[i] == '/' || fileName[i] == '\\' || fileName[i] == ':')
@@ -60,22 +75,28 @@ static std::string extractFileNameFromMultipart(const std::string& body,
     return fileName;
 }
 
-/* Extrae el contenido binario del archivo desde multipart/form-data
+/* Extracts file content from a multipart/form-data request body
+ * 1. Locates end headers (double CRLF or LF)
+ *    - If no header separator is found -> returns full body as fallback
+ * 2. Determines start of actual file content (after headers)
+ * 3. Searches for multipart boundary marker to find where content ends
+ *    - Tries both closing boundary ("--boundary--") and normal boundary
+ *    - If not found -> assumes content goes until the end of the body
+ * 4. Trims trailing newline chars (\r\n or \n) before boundary
+ * 5. Returns extracted file content as substring of the body
  */
 static std::string extractFileContentFromMultipart(const std::string& body,
                                                    const std::string& boundary)
 {
-    // Buscar el final de los headers (doble CRLF)
     size_t headerEnd = body.find("\r\n\r\n");
     if (headerEnd == std::string::npos)
     {
         headerEnd = body.find("\n\n");
         if (headerEnd == std::string::npos)
-            return body; // fallback: devolver todo
+            return body;
 
-        size_t contentStart = headerEnd + 2; // saltar "\n\n"
+        size_t contentStart = headerEnd + 2;
 
-        // Buscar el boundary final
         std::string boundaryMarker = "--" + boundary + "--";
         size_t contentEnd = body.find(boundaryMarker);
         if (contentEnd == std::string::npos)
@@ -84,16 +105,14 @@ static std::string extractFileContentFromMultipart(const std::string& body,
         if (contentEnd == std::string::npos)
             contentEnd = body.length();
 
-        // Eliminar el LF antes del boundary
         if (contentEnd > 1 && body[contentEnd - 1] == '\n')
             contentEnd -= 1;
 
         return body.substr(contentStart, contentEnd - contentStart);
     }
 
-    size_t contentStart = headerEnd + 4; // saltar "\r\n\r\n"
+    size_t contentStart = headerEnd + 4;
 
-    // Buscar el boundary final
     std::string boundaryMarker = "--" + boundary + "--";
     size_t contentEnd = body.find(boundaryMarker);
     if (contentEnd == std::string::npos)
@@ -102,7 +121,6 @@ static std::string extractFileContentFromMultipart(const std::string& body,
     if (contentEnd == std::string::npos)
         contentEnd = body.length();
 
-    // Eliminar el CRLF antes del boundary
     if (contentEnd > 2 && body[contentEnd - 2] == '\r' && body[contentEnd - 1] == '\n')
         contentEnd -= 2;
 
@@ -374,7 +392,6 @@ void HttpResponse::handleGet(const std::string& resolved, const Location& loc)
 void HttpResponse::handleDelete(const std::string& resolved, const Location& loc)
 {
     (void)loc; // Avoid unused parameter warning
-    //----- Uses resolvedPath
     std::string fullPath = resolved;
     //------
     struct stat s;
@@ -431,49 +448,64 @@ bool HttpResponse::savePostFile(const std::string& uploadPath, const std::string
     return false;
 }
 
-/* Handles HTTP POST request (file write)
- * 1. Checks if file already exists
- * 2. Opens/creates file at resolved path
- * 3. Writes request body into file
- * 4. If write fails -> 500 error
- * 5. If file existed before -> 200 OK
- *    Otherwise            -> 201 Created
+/* Handles HTTP POST request for file uploads.
+ * 1. Verifies that uploads are allowed (upload_path must be set),
+ *    - Otherwise → returns 405 Method Not Allowed
+ * 2. Checks request body size against client_max_body_size,
+ *    - If exceeded → returns 413 Payload Too Large 
+ * 3. Reads the Content-Type header to determine how to process body
+ *    - If multipart/form-data → extracts filename and file content
+ *    - Otherwise → treats entire body as raw file content
+ * 4. Resolves final upload directory path based on config
+ * 5. Creates/overwrites target file and writes content
+ *    - If file cannot be opened or written → 500 Internal Server Error
+ * 6. On success, returns:
+ *    - 200 OK (file is written or overwritten)
+ *    - HTML response including uploaded filename
  */
-void HttpResponse::handlePost(const std::string& resolved, const std::string& body,
-                              const Location& loc, const HttpRequest& req)
+void HttpResponse::handlePost(const std::string& resolved,
+                              const std::string& body,
+                              const Location& loc,
+                              const HttpRequest& req)
 {
-    (void)resolved; // Not used now since we use loc.upload_path
-    
-    // Si no hay upload_path configurado, rechazar con 405
+    (void)resolved;
+
     if (loc.upload_path.empty())
     {
         setStatusCode(405);
-        setBody("<html><body><h1>405 Method Not Allowed</h1><p>POST not allowed on this route.</p></body></html>");
+        setBody("<html><body><h1>405 Method Not Allowed</h1></body></html>");
         addHeader("Content-Type", "text/html");
         return;
     }
 
-    // Extraer boundary del Content-Type si es multipart
-    std::string boundary = "";
-    std::string contentType = "";
-    
-    const std::map<std::string, std::string>& reqHeaders = req.getHeaders();
-    std::map<std::string, std::string>::const_iterator it = reqHeaders.find("Content-Type");
-    if (it == reqHeaders.end())
-        it = reqHeaders.find("content-type");
-    if (it != reqHeaders.end())
+    if (loc.client_max_body_size > 0 &&
+        body.size() > loc.client_max_body_size)
+    {
+        setStatusCode(413);
+        setBody("<html><body><h1>413 Payload Too Large</h1></body></html>");
+        addHeader("Content-Type", "text/html");
+        return;
+    }
+
+    std::string contentType;
+    const std::map<std::string, std::string>& headers = req.getHeaders();
+
+    std::map<std::string, std::string>::const_iterator it = headers.find("Content-Type");
+    if (it == headers.end())
+        it = headers.find("content-type");
+    if (it != headers.end())
         contentType = it->second;
 
-    std::string fileName = "upload"; // nombre por defecto
+    std::string fileName = "upload";
     std::string fileContent = body;
 
     if (contentType.find("multipart/form-data") != std::string::npos)
     {
-        size_t boundaryPos = contentType.find("boundary=");
-        if (boundaryPos != std::string::npos)
+        size_t pos = contentType.find("boundary=");
+        if (pos != std::string::npos)
         {
-            boundary = contentType.substr(boundaryPos + 9);
-            // Eliminar comillas si existen
+            std::string boundary = contentType.substr(pos + 9);
+
             if (!boundary.empty() && boundary[0] == '"')
                 boundary = boundary.substr(1, boundary.find('"', 1) - 1);
 
@@ -482,24 +514,14 @@ void HttpResponse::handlePost(const std::string& resolved, const std::string& bo
         }
     }
 
-    // Usar upload_path de la configuración si está disponible
-    std::string uploadDir = resolved;
-    if (!loc.upload_path.empty())
-    {
-        uploadDir = loc.upload_path;
-        // Si no es una ruta absoluta y comienza con ./, quitamos el ./
-        if (uploadDir.substr(0, 2) == "./")
-        {
-            uploadDir = uploadDir.substr(2);
-        }
-        // Si no es una ruta absoluta, usar root + upload_path
-        if (!uploadDir.empty() && uploadDir[0] != '/')
-        {
-            uploadDir = loc.root + "/" + uploadDir;
-        }
-    }
+    std::string uploadDir = loc.upload_path;
 
-    // Asegurar que la ruta termina con /
+    if (uploadDir.substr(0, 2) == "./")
+        uploadDir = uploadDir.substr(2);
+
+    if (!uploadDir.empty() && uploadDir[0] != '/')
+        uploadDir = loc.root + "/" + uploadDir;
+
     if (!uploadDir.empty() && uploadDir[uploadDir.size() - 1] != '/')
         uploadDir += "/";
 
@@ -509,8 +531,7 @@ void HttpResponse::handlePost(const std::string& resolved, const std::string& bo
     if (!file.is_open())
     {
         setStatusCode(500);
-        setBody("<html><body><h1>500 Internal Server Error</h1><p>Failed to save "
-                "file.</p></body></html>");
+        setBody("<html><body><h1>500 Internal Server Error</h1></body></html>");
         addHeader("Content-Type", "text/html");
         return;
     }
@@ -521,13 +542,13 @@ void HttpResponse::handlePost(const std::string& resolved, const std::string& bo
     if (!file)
     {
         setStatusCode(500);
-        setBody("<html><body><h1>500 Internal Server Error</h1><p>Write failed.</p></body></html>");
+        setBody("<html><body><h1>500 Write Error</h1></body></html>");
         addHeader("Content-Type", "text/html");
         return;
     }
 
-    setStatusCode(201); // Created
-    setBody("<html><body><h1>POST OK - File: " + fileName + "</h1></body></html>");
+    setStatusCode(200);  // ← CLAVE (no 201)
+    setBody("<html><body><h1>POST OK</h1><p>File: " + fileName + "</p></body></html>");
     addHeader("Content-Type", "text/html");
 }
 
