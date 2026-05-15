@@ -3,10 +3,10 @@
 /*                                                        :::      ::::::::   */
 /*   webserv.cpp                                        :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: macastro <macastro@student.42madrid.com    +#+  +:+       +#+        */
+/*   By: msoriano <msoriano@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/01/08 18:51:13 by angnavar          #+#    #+#             */
-/*   Updated: 2026/05/13 02:06:51 by macastro         ###   ########.fr       */
+/*   Updated: 2026/05/15 13:10:57 by msoriano         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -558,7 +558,7 @@ HttpResponse Webserv::routeRequest(const HttpRequest& req, const Config& server)
 
     // 8. Dispatch method
     if (req.getMethod() == "GET" || req.getMethod() == "HEAD")
-        res.handleGet(resolved.fsPath, *loc, server.error_pages, server.root, resolved.appendIndex);
+        res.handleGet(resolved.fsPath, *loc, server.error_pages, server.root);
     else if (req.getMethod() == "POST")
         res.handlePost(resolved.fsPath, req.getBody(), *loc, req);
     else if (req.getMethod() == "DELETE")
@@ -984,6 +984,9 @@ void Webserv::handleClientData(int fd, uint32_t events)
             client.lastBodyLogCheckpoint = 0;
             client.resetRequestCache();
 
+            logInfo(client.requestMethod + " " +
+                (client.requestPath.empty() ? "/" : client.requestPath) +
+                " -> 413");
             setClientEpollInterest(fd, EPOLLOUT);
             return;
         }
@@ -1160,6 +1163,9 @@ void Webserv::handleClientData(int fd, uint32_t events)
                 client.lastBodyLogCheckpoint = 0;
                 client.resetRequestCache();
 
+                logInfo(client.requestMethod + " " +
+                    (client.requestPath.empty() ? "/" : client.requestPath) +
+                    " -> 413");
                 setClientEpollInterest(fd, EPOLLOUT);
                 return;
             }
