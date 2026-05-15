@@ -363,7 +363,9 @@ void HttpResponse::loadFile(const std::string& path, const std::map<int, std::st
     }
 }
 
-/* Handles HTTP GET request
+/**
+ * Handles HTTP GET request
+ * 0. If appendIndex is true, we need to stat the directory without the index file appended
  * 1. Checks if resolved path exists
  *      - If not -> 404
  * 2. If path is a directory:
@@ -373,10 +375,31 @@ void HttpResponse::loadFile(const std::string& path, const std::map<int, std::st
  * 3. If path is a file:
  *      - Calls loadFile()
  */
-void HttpResponse::handleGet(const std::string& resolved, const Location& loc, const std::map<int, std::string>& errorPages, const std::string& root)
+void HttpResponse::handleGet(const std::string& resolved, const Location& loc, const std::map<int, std::string>& errorPages, const std::string& root, bool appendIndex)
 {
     struct stat s;
-    if (stat(resolved.c_str(), &s) != 0)
+    
+    // If appendIndex is true, we need to stat the directory without the index file appended
+    std::string directoryPath = resolved;
+    if (appendIndex && !loc.index.empty())
+    {
+        // Remove the index file from the path to get the directory
+        // The index should be at the end, after the last /
+        size_t lastSlash = resolved.rfind('/');
+        if (lastSlash != std::string::npos)
+        {
+            // Check if what follows is the index file
+            std::string after_slash = resolved.substr(lastSlash + 1);
+            if (after_slash == loc.index)
+            {
+                directoryPath = resolved.substr(0, lastSlash);
+                if (directoryPath.empty())
+                    directoryPath = "/";
+            }
+        }
+    }
+    
+    if (stat(directoryPath.c_str(), &s) != 0)
     {
         setErrorPage(404, errorPages, root);
         return;
@@ -387,7 +410,7 @@ void HttpResponse::handleGet(const std::string& resolved, const Location& loc, c
         // Try index inside directory
         if (!loc.index.empty())
         {
-            std::string indexPath = resolved;
+            std::string indexPath = directoryPath;
             if (!indexPath.empty() && indexPath[indexPath.size() - 1] != '/')
                 indexPath += "/";
             indexPath += loc.index;
@@ -403,7 +426,7 @@ void HttpResponse::handleGet(const std::string& resolved, const Location& loc, c
         if (loc.autoindex)
         {
             setStatusCode(200);
-            setBody(generateAutoIndex(resolved));
+            setBody(generateAutoIndex(directoryPath));
             addHeader("Content-Type", "text/html");
             return;
         }

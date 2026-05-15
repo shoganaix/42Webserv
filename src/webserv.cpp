@@ -558,7 +558,7 @@ HttpResponse Webserv::routeRequest(const HttpRequest& req, const Config& server)
 
     // 8. Dispatch method
     if (req.getMethod() == "GET" || req.getMethod() == "HEAD")
-        res.handleGet(resolved.fsPath, *loc, server.error_pages, server.root);
+        res.handleGet(resolved.fsPath, *loc, server.error_pages, server.root, resolved.appendIndex);
     else if (req.getMethod() == "POST")
         res.handlePost(resolved.fsPath, req.getBody(), *loc, req);
     else if (req.getMethod() == "DELETE")

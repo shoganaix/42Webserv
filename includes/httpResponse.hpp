@@ -84,7 +84,7 @@ class HttpResponse
     void loadFile(const std::string& path, const std::map<int, std::string>& errorPages, const std::string& root);
     // Generate AutoIndex
     std::string generateAutoIndex(const std::string& path);
-    void handleGet(const std::string& resolved, const Location& loc, const std::map<int, std::string>& errorPages, const std::string& root);
+    void handleGet(const std::string& resolved, const Location& loc, const std::map<int, std::string>& errorPages, const std::string& root, bool appendIndex = false);
 
     // DELETE handling method
     void handleDelete(const std::string& url, const Location& loc);

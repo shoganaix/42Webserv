@@ -129,6 +129,22 @@ ResolvedPath resolvePath(const Location& loc, const std::string& uriPath)
     // (/directory, /directory/ or URI ending on '/')
     if (out.resPath.empty() || endsWithSlash(uriPath))
     {
+        // If resPath is empty and location path ends with /, it means we're accessing the location directly
+        // In this case, we need to append the location path to the root first, then add index
+        if (out.resPath.empty() && endsWithSlash(loc.path) && loc.path != "/")
+        {
+            // Remove trailing slash from location path and use as folder name
+            std::string folderName = loc.path;
+            while (!folderName.empty() && folderName[folderName.size() - 1] == '/')
+                folderName = folderName.substr(0, folderName.size() - 1);
+            
+            // Now append this folder to the root
+            if (!loc.alias.empty())
+                out.fsPath = joinPaths(loc.alias, folderName);
+            else
+                out.fsPath = joinPaths(loc.root, folderName);
+        }
+        
         out.fsPath = joinPaths(out.fsPath, loc.index);
         out.appendIndex = true;
     }
