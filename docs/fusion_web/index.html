@@ -59,6 +59,12 @@
     <p class="note">Esta es la única ruta visual segura para hacer clic aquí.</p>
   </div>
 
+  <div class="card">
+    <h2>Some folder</h2>
+    <p><a href="/some_folder/">Go to /some_folder/</a></p>
+    <p class="note">Mira esta carpeta!</p>
+  </div>
+
    <div class="card">
     <h2>File Upload tests</h2>
     <p>Upload a file to <code>/upload</code>:</p>
@@ -113,6 +119,14 @@
     <p>Malformed request:</p>
     <code>printf 'GARBAGE\r\n\r\n' | nc localhost 8080</code>
   </div>
+
+  <div class="card">
+    <h2>DELETE not allowed</h2>
+    <p>Invalid method:</p>
+    <code>curl -X DELETE http://localhost:8080/some_folder/lil-guy.jpg -v</code>
+  </div>
+
+
 
   <script>
     document.getElementById('uploadForm').addEventListener('submit', function(e) {

@@ -119,12 +119,39 @@ ResolvedPath resolvePath(const Location& loc, const std::string& uriPath)
 
     out.resPath = computeRemainder(loc.path, uriPath);
 
-    if (!loc.alias.empty())
-        out.fsPath = joinPaths(loc.alias, out.resPath);
+    // If resPath is not empty, we're accessing a file/subfolder within the location
+    // OR if the location path is "/" (the rest of the path)
+    // We should combine: root + (location path minus trailing slash if exists) + resPath
+    // UNLESS the location path is "/" itself
+    if (!out.resPath.empty() || loc.path == "/")
+    {
+        if (!loc.alias.empty())
+            out.fsPath = joinPaths(loc.alias, out.resPath);
+        else
+        {
+            // For normal locations with resPath, we need to include the location folder name
+            std::string folderPrefix = loc.path;
+            // Remove trailing slash from location path
+            while (!folderPrefix.empty() && folderPrefix[folderPrefix.size() - 1] == '/')
+                folderPrefix = folderPrefix.substr(0, folderPrefix.size() - 1);
+            
+            if (folderPrefix != "")  // Only add if not root location
+                out.fsPath = joinPaths(loc.root, joinPaths(folderPrefix, out.resPath));
+            else
+                out.fsPath = joinPaths(loc.root, out.resPath);
+        }
+    }
     else
     {
-        out.fsPath = joinPaths(loc.root, out.resPath);
+        // resPath is empty (accessing location directly like /some_folder/)
+        if (!loc.alias.empty())
+            out.fsPath = joinPaths(loc.alias, out.resPath);
+        else
+        {
+            out.fsPath = joinPaths(loc.root, out.resPath);
+        }
     }
+    
     // If request is location, then search for index
     // (/directory, /directory/ or URI ending on '/')
     if (out.resPath.empty() || endsWithSlash(uriPath))
@@ -146,5 +173,6 @@ ResolvedPath resolvePath(const Location& loc, const std::string& uriPath)
         out.fsPath = joinPaths(out.fsPath, loc.index);
         out.appendIndex = true;
     }
+    
     return (out);
 }

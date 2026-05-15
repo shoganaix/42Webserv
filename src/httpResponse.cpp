@@ -263,20 +263,20 @@ void HttpResponse::clear()
  * 1. Opens directory
  * 2. Iterates over entries (files & folders)
  * 3. Skips hidden files (except "..")
- * 4. Builds HTML list with links
+ * 4. Builds HTML list with links using the URI path for correct routing
  * 5. Adds '/' suffix for directories
  * 6. Returns complete HTML page
  */
-std::string HttpResponse::generateAutoIndex(const std::string& path)
+std::string HttpResponse::generateAutoIndex(const std::string& fsPath, const std::string& uriPath)
 {
     DIR* dir;
     struct dirent* entry;
     std::stringstream html;
 
-    html << "<html><head><title>Index of " << path << "</title></head><body>";
-    html << "<h1>Index of " << path << "</h1><hr><ul>";
+    html << "<html><head><title>Index of " << uriPath << "</title></head><body>";
+    html << "<h1>Index of " << uriPath << "</h1><hr><ul>";
 
-    if ((dir = opendir(path.c_str())) != NULL)
+    if ((dir = opendir(fsPath.c_str())) != NULL)
     {
         while ((entry = readdir(dir)) != NULL)
         {
@@ -287,7 +287,14 @@ std::string HttpResponse::generateAutoIndex(const std::string& path)
             if (name[0] == '.' && name != "..")
                 continue;
 
-            html << "<li><a href=\"" << name;
+            // Construct the full URI path for the link
+            std::string linkPath = uriPath;
+            // Ensure URI path ends with /
+            if (!linkPath.empty() && linkPath[linkPath.size() - 1] != '/')
+                linkPath += "/";
+            linkPath += name;
+
+            html << "<li><a href=\"" << linkPath;
 
             if (name == ".." || entry->d_type == DT_DIR)
                 html << "/";
@@ -375,7 +382,7 @@ void HttpResponse::loadFile(const std::string& path, const std::map<int, std::st
  * 3. If path is a file:
  *      - Calls loadFile()
  */
-void HttpResponse::handleGet(const std::string& resolved, const Location& loc, const std::map<int, std::string>& errorPages, const std::string& root, bool appendIndex)
+void HttpResponse::handleGet(const std::string& resolved, const Location& loc, const std::map<int, std::string>& errorPages, const std::string& root, const std::string& uriPath, bool appendIndex)
 {
     struct stat s;
     
@@ -426,7 +433,7 @@ void HttpResponse::handleGet(const std::string& resolved, const Location& loc, c
         if (loc.autoindex)
         {
             setStatusCode(200);
-            setBody(generateAutoIndex(directoryPath));
+            setBody(generateAutoIndex(directoryPath, uriPath));
             addHeader("Content-Type", "text/html");
             return;
         }

@@ -301,7 +301,7 @@ void Webserv::setSockets()
 
         this->fdToConfig[fd] = this->config[i];
         this->fds.push_back(fd);
-        std::cout << PURPLE << "Server [" << config[i].server_name << "] listening on port "
+        std::cout << PURPLE << "Server [" << config[i].server_name << "] listening on port http://localhost:"
                   << config[i].port << RESET << std::endl;
     }
 }
@@ -558,7 +558,7 @@ HttpResponse Webserv::routeRequest(const HttpRequest& req, const Config& server)
 
     // 8. Dispatch method
     if (req.getMethod() == "GET" || req.getMethod() == "HEAD")
-        res.handleGet(resolved.fsPath, *loc, server.error_pages, server.root);
+        res.handleGet(resolved.fsPath, *loc, server.error_pages, server.root, req.getPath(), resolved.appendIndex);
     else if (req.getMethod() == "POST")
         res.handlePost(resolved.fsPath, req.getBody(), *loc, req);
     else if (req.getMethod() == "DELETE")
