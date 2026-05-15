@@ -3,10 +3,10 @@
 /*                                                        :::      ::::::::   */
 /*   webserv.cpp                                        :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: usuario <usuario@student.42.fr>            +#+  +:+       +#+        */
+/*   By: macastro <macastro@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/01/08 18:51:13 by angnavar          #+#    #+#             */
-/*   Updated: 2026/04/27 22:43:33 by usuario          ###   ########.fr       */
+/*   Updated: 2026/05/13 02:06:51 by macastro         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -14,7 +14,7 @@
  *                          🧠WEBSERV BRAIN🧠
  *
  * This class represents the main Webserver engine using epoll
- * 
+ *
  * Responsibilities:
  *  - Load and store parsed configuration
  *  - Initialize listening sockets for each server
@@ -41,7 +41,6 @@
 #include "httpResponse.hpp"
 #include "cgiHandler.hpp"
 #include "pathResolver.hpp"
-
 
 bool Webserv::_running = true; // Initialize the static running variable
 
@@ -405,7 +404,7 @@ HttpResponse Webserv::routeRequest(const HttpRequest& req, const Config& server)
         // -------------- DEBUG: ------------------
         logDebug(RED, "[ROUTE] no matching location");
         // ----------------------------------------
-       
+
         res.setErrorPage(404, server.error_pages, server.root);
         return (res);
     }
@@ -451,7 +450,7 @@ HttpResponse Webserv::routeRequest(const HttpRequest& req, const Config& server)
         logDebug(BLUE, resolvedMsg);
     }
     // ----------------------------------------------------------------------------
-    
+
     // 6. Check allowed methods.
     // CGI gets priority so POST to .bla works even if the location is GET-only.
     CgiTarget target;
@@ -496,7 +495,7 @@ HttpResponse Webserv::routeRequest(const HttpRequest& req, const Config& server)
                 _cgiHandler->execute(req, target, server.server_name, server.port, "127.0.0.1");
 
             CgiContext* ctx = new CgiContext();
-            
+
             ctx->clientFd = req.getClientFd();
             ctx->writeBuffer = req.getBody();
             ctx->bytesWritten = 0;
@@ -515,9 +514,9 @@ HttpResponse Webserv::routeRequest(const HttpRequest& req, const Config& server)
             if (ctx->writeBuffer.empty())
             {
                 /* If no body is present:
-                * Close input pipe to send EOF to CGI process.
-                * This prevents the CGI from blocking waiting for input.
-                */
+                 * Close input pipe to send EOF to CGI process.
+                 * This prevents the CGI from blocking waiting for input.
+                 */
                 closeCgiPipe(ctx, ctx->inFd);
             }
             else
@@ -587,10 +586,10 @@ void Webserv::finalizeCgiResponse(CgiContext* ctx, int fd)
     {
         this->clients[ctx->clientFd].writeBuffer = res.toString(false);
         this->clients[ctx->clientFd].bytesSent = 0;
-        
+
         // Log CGI response
         logInfo("CGI -> " + to_string(res.getStatusCode()));
-        
+
         setClientEpollInterest(ctx->clientFd, EPOLLOUT);
     }
 
@@ -881,10 +880,10 @@ void Webserv::handleCgiEvent(int fd, uint32_t events)
     }
 
     /* READING from CGI (stdout / outFd)
-    *
-    * IMPORTANT:
-    * These are independent checks (NOT else-if),
-    * since both events may occur simultaneously  */
+     *
+     * IMPORTANT:
+     * These are independent checks (NOT else-if),
+     * since both events may occur simultaneously  */
     if (_cgiFds.count(fd) && fd == ctx->outFd && (events & (EPOLLIN | EPOLLHUP | EPOLLERR)))
     {
         char buffer[32768];
@@ -1427,11 +1426,11 @@ void Webserv::handleClientData(int fd, uint32_t events)
             // -----------------------------------------
             client.writeBuffer = res.toString(client.request.getMethod() == "HEAD");
             client.bytesSent = 0;
-            
+
             // Log the response
-            logInfo(client.request.getMethod() + " " + client.request.getPath() + 
-                   " -> " + to_string(res.getStatusCode()));
-            
+            logInfo(client.request.getMethod() + " " + client.request.getPath() + " -> " +
+                    to_string(res.getStatusCode()));
+
             setClientEpollInterest(fd, EPOLLOUT);
 
             client.readBuffer.clear();
@@ -1583,8 +1582,8 @@ void Webserv::closeConnection(int fd)
  *     -> If that fd is a listening socket, accepts new client connections on sockets
  *     -> Otherwise, client request is processed
  *  - Handles client activity on connected sockets
- *  
- * 
+ *
+ *
  * epoll_wait()
  *     ↓
  *  fd event detected
@@ -1652,10 +1651,91 @@ void Webserv::run()
             }
         }
     }
-
 }
 
-void Webserv::_handle_signal(int signal) {
+void Webserv::_handle_signal(int signal)
+{
     (void)signal;
     Webserv::_running = false;
+}
+
+/* Destructor: Cleans up all resources
+ * - Calls cleanup() to properly shutdown the server
+ * - Prevents resource leaks and zombie processes
+ */
+Webserv::~Webserv() { cleanup(); }
+
+/* Cleanup method: Properly shuts down the server
+ * 1. Kills all active CGI processes
+ * 2. Closes all client connections
+ * 3. Closes all listening sockets
+ * 4. Closes the epoll file descriptor
+ */
+void Webserv::cleanup()
+{
+    std::cout << YELLOW << "[CLEANUP] Starting server shutdown..." << RESET << std::endl;
+
+    // 1. Destroy all CGI contexts (kills processes)
+    std::vector<CgiContext*> cgisToDestroy;
+    for (std::map<int, CgiContext*>::iterator it = _cgiFds.begin(); it != _cgiFds.end(); ++it)
+    {
+        CgiContext* ctx = it->second;
+        bool alreadyQueued = false;
+        for (size_t i = 0; i < cgisToDestroy.size(); ++i)
+        {
+            if (cgisToDestroy[i] == ctx)
+            {
+                alreadyQueued = true;
+                break;
+            }
+        }
+        if (!alreadyQueued)
+            cgisToDestroy.push_back(ctx);
+    }
+
+    for (size_t i = 0; i < cgisToDestroy.size(); ++i)
+    {
+        destroyCgiContext(cgisToDestroy[i], true); // true = kill process
+    }
+
+    std::cout << YELLOW << "[CLEANUP] Destroyed " << cgisToDestroy.size() << " CGI contexts"
+              << RESET << std::endl;
+
+    // 2. Close all client connections
+    std::vector<int> clientFds;
+    for (std::map<int, ClientState>::iterator it = clients.begin(); it != clients.end(); ++it)
+    {
+        clientFds.push_back(it->first);
+    }
+
+    for (size_t i = 0; i < clientFds.size(); ++i)
+    {
+        epoll_ctl(this->epollFd, EPOLL_CTL_DEL, clientFds[i], NULL);
+        close(clientFds[i]);
+    }
+    clients.clear();
+
+    std::cout << YELLOW << "[CLEANUP] Closed " << clientFds.size() << " client connections" << RESET
+              << std::endl;
+
+    // 3. Close all listening sockets
+    for (size_t i = 0; i < fds.size(); ++i)
+    {
+        epoll_ctl(this->epollFd, EPOLL_CTL_DEL, fds[i], NULL);
+        close(fds[i]);
+    }
+    fds.clear();
+    fdToConfig.clear();
+
+    std::cout << YELLOW << "[CLEANUP] Closed " << fds.size() << " listening sockets" << RESET
+              << std::endl;
+
+    // 4. Close epoll file descriptor
+    if (epollFd >= 0)
+    {
+        close(epollFd);
+        epollFd = -1;
+    }
+
+    std::cout << GREEN << "[CLEANUP] Server shutdown complete" << RESET << std::endl;
 }

@@ -184,11 +184,12 @@ class Webserv
 
   public:
     Webserv(const std::string& configFile);
-    ~Webserv() {};
+    ~Webserv();
     void run();
 
   private:
     static bool _running;
+    void cleanup();
 
     static void _handle_signal(int signal);
     void setSockets();
